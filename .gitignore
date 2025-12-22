@@ -12,6 +12,7 @@ test/
 # IDEs
 .idea/
 .vscode/
+!.vscode/settings.json
 
 # Logs and runtime data
 log/
