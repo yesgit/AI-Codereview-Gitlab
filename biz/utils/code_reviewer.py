@@ -1,7 +1,7 @@
 import abc
 import os
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 import yaml
 from jinja2 import Template
@@ -16,11 +16,20 @@ class BaseReviewer(abc.ABC):
 
     def __init__(self, prompt_key: str):
         self.client = Factory().getClient()
-        self.prompts = self._load_prompts(prompt_key, os.getenv("REVIEW_STYLE", "professional"))
+        self.prompts = self._load_prompts(prompt_key)
 
-    def _load_prompts(self, prompt_key: str, style="professional") -> Dict[str, Any]:
+    def _load_prompts(
+        self, prompt_key: str, style: Optional[str] = None, prompt_templates_file: Optional[str] = None
+    ) -> Dict[str, Any]:
         """加载提示词配置"""
-        prompt_templates_file = "conf/prompt_templates.yml"
+        if not style:
+            # 如果未提供, 从环境变量中获取审查风格，默认为 "professional"
+            style = os.getenv("REVIEW_STYLE", "professional")
+
+        if not prompt_templates_file:
+            # 如果未提供, 使用默认的提示词配置文件路径
+            prompt_templates_file = "conf/prompt_templates.yml"
+
         try:
             # 在打开 YAML 文件时显式指定编码为 UTF-8，避免使用系统默认的 GBK 编码。
             with open(prompt_templates_file, "r", encoding="utf-8") as file:
@@ -60,12 +69,13 @@ class CodeReviewer(BaseReviewer):
     def __init__(self):
         super().__init__("code_review_prompt")
 
-    def review_and_strip_code(self, changes_text: str, commits_text: str = "") -> str:
+    def review_and_strip_code(self, changes_text: str, commits_text: str = "", project_name: str = "") -> str:
         """
         Review判断changes_text超出取前REVIEW_MAX_TOKENS个token，超出则截断changes_text，
         调用review_code方法，返回review_result，如果review_result是markdown格式，则去掉头尾的```
-        :param changes_text:
-        :param commits_text:
+        :param changes_text: 代码变更内容
+        :param commits_text: 提交信息
+        :param project_name: 项目名称
         :return:
         """
         # 如果超长，取前REVIEW_MAX_TOKENS个token
@@ -80,23 +90,147 @@ class CodeReviewer(BaseReviewer):
         if tokens_count > review_max_tokens:
             changes_text = truncate_text_by_tokens(changes_text, review_max_tokens)
 
-        review_result = self.review_code(changes_text, commits_text).strip()
+        review_result = self.review_code(changes_text, commits_text, project_name).strip()
         if review_result.startswith("```markdown") and review_result.endswith("```"):
             return review_result[11:-3].strip()
         return review_result
 
-    def review_code(self, diffs_text: str, commits_text: str = "") -> str:
+    def review_code(self, diffs_text: str, commits_text: str = "", project_name: str = "") -> str:
         """Review 代码并返回结果"""
+        normalized_project_name = project_name.replace("-", "_") if project_name else project_name
+        project_prompts_path = os.getenv(f"{normalized_project_name.upper()}_PROMPT", None)
+
+        # 按需重新加载 prompts 配置， 同时也可以支持项目级别提示词的热加载
+        prompts = (
+            self._load_prompts(prompt_key="code_review_prompt", prompt_templates_file=project_prompts_path)
+            if project_prompts_path
+            else self.prompts
+        )
         messages = [
-            self.prompts["system_message"],
+            prompts["system_message"],
             {
                 "role": "user",
-                "content": self.prompts["user_message"]["content"].format(
-                    diffs_text=diffs_text, commits_text=commits_text
-                ),
+                "content": prompts["user_message"]["content"].format(diffs_text=diffs_text, commits_text=commits_text),
             },
         ]
         return self.call_llm(messages)
+
+    def review_changes_in_batches(self, changes: List[Dict[str, Any]], commits_text: str = "", project_name: str = "") -> str:
+        """
+        按文件批次审查代码变更，然后汇总所有审查结果
+        :param changes: 代码变更列表，每个元素是一个包含文件信息的字典
+        :param commits_text: 提交信息
+        :param project_name: 项目名称
+        :return: 汇总后的审查结果
+        """
+        if not changes:
+            logger.info("代码变更为空")
+            return "代码为空"
+
+        # 检查是否启用批量审查
+        batch_review_enabled = os.getenv("BATCH_REVIEW_ENABLED", "1") == "1"
+
+        # 如果未启用批量审查，使用原有的一次性审查方式
+        if not batch_review_enabled:
+            logger.info("批量审查功能未启用，使用传统一次性审查方式")
+            return self.review_and_strip_code(str(changes), commits_text, project_name)
+
+        review_max_tokens = int(os.getenv("REVIEW_MAX_TOKENS", 10000))
+        # 获取每批次审查的文件数量配置
+        files_per_batch = int(os.getenv("BATCH_REVIEW_FILES_PER_BATCH", 1))
+        logger.info(f"批量审查已启用，每批次审查 {files_per_batch} 个文件")
+
+        partial_reviews = []
+        total_files = len(changes)
+
+        # 按配置的批次大小分批进行审查
+        for batch_start in range(0, total_files, files_per_batch):
+            batch_end = min(batch_start + files_per_batch, total_files)
+            batch_changes = changes[batch_start:batch_end]
+            batch_num = (batch_start // files_per_batch) + 1
+            total_batches = (total_files + files_per_batch - 1) // files_per_batch
+
+            logger.info(f"正在审查第 {batch_num}/{total_batches} 批次 (文件 {batch_start + 1}-{batch_end}/{total_files})")
+
+            # 收集当前批次的文件路径
+            batch_file_paths = [
+                change.get('new_path') or change.get('old_path', 'unknown')
+                for change in batch_changes
+            ]
+
+            # 将批次内的文件转换为文本
+            batch_text = str(batch_changes)
+
+            # 计算tokens数量，如果超过限制则截断
+            tokens_count = count_tokens(batch_text)
+            if tokens_count > review_max_tokens:
+                logger.warning(f"批次 {batch_num} 的变更超过 {review_max_tokens} tokens，将截断")
+                batch_text = truncate_text_by_tokens(batch_text, review_max_tokens)
+
+            # 审查当前批次，传递 project_name 参数
+            try:
+                review_result = self.review_code(batch_text, commits_text, project_name).strip()
+                if review_result.startswith("```markdown") and review_result.endswith("```"):
+                    review_result = review_result[11:-3].strip()
+
+                # 添加批次标识
+                batch_header = f"### 批次 {batch_num} (文件: {', '.join(batch_file_paths)})\n"
+                partial_reviews.append(f"{batch_header}{review_result}")
+                logger.info(f"批次 {batch_num} 审查完成")
+            except Exception as e:
+                logger.error(f"审查批次 {batch_num} 时出错: {e}")
+                partial_reviews.append(f"### 批次 {batch_num}\n审查失败: {str(e)}")
+
+        # 如果只有一个批次，直接返回结果（去掉批次标识）
+        if len(partial_reviews) == 1:
+            # 去掉批次标题行
+            result = partial_reviews[0]
+            lines = result.split('\n', 1)
+            return lines[1] if len(lines) > 1 else result
+
+        # 汇总多个批次的审查结果
+        logger.info(f"开始汇总 {len(partial_reviews)} 个批次的审查结果")
+        summary_result = self._summarize_reviews(partial_reviews, project_name)
+        return summary_result
+
+    def _summarize_reviews(self, partial_reviews: List[str], project_name: str = "") -> str:
+        """
+        使用 summary_merge_review_prompt 汇总多个审查结果
+        :param partial_reviews: 各批次的审查结果列表
+        :param project_name: 项目名称
+        :return: 汇总后的总审查报告
+        """
+        # 加载汇总提示词，支持项目级别的自定义
+        normalized_project_name = project_name.replace("-", "_") if project_name else project_name
+        project_prompts_path = os.getenv(f"{normalized_project_name.upper()}_PROMPT", None)
+        
+        summary_prompts = (
+            self._load_prompts(prompt_key="summary_merge_review_prompt", prompt_templates_file=project_prompts_path)
+            if project_prompts_path
+            else self._load_prompts("summary_merge_review_prompt", os.getenv("REVIEW_STYLE", "professional"))
+        )
+
+        # 拼接所有分批审查结果
+        partial_reviews_text = "\n\n---\n\n".join(partial_reviews)
+
+        # 构建汇总请求消息
+        messages = [
+            summary_prompts["system_message"],
+            {
+                "role": "user",
+                "content": summary_prompts["user_message"]["content"].format(
+                    partial_reviews_text=partial_reviews_text
+                ),
+            },
+        ]
+
+        # 调用LLM进行汇总
+        summary_result = self.call_llm(messages).strip()
+        if summary_result.startswith("```markdown") and summary_result.endswith("```"):
+            summary_result = summary_result[11:-3].strip()
+
+        logger.info("审查结果汇总完成")
+        return summary_result
 
     @staticmethod
     def parse_review_score(review_text: str) -> int:
@@ -105,4 +239,3 @@ class CodeReviewer(BaseReviewer):
             return 0
         match = re.search(r"总分[:：]\s*(\d+)分?", review_text)
         return int(match.group(1)) if match else 0
-
