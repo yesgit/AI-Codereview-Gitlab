@@ -205,6 +205,11 @@ st.markdown("""
 st.markdown(
     """
     <style>
+    /* 调整侧边栏宽度 */
+    [data-testid="stSidebar"] {
+        min-width: 180px;
+        max-width: 180px;
+    }
     .main {
         background-color: #f0f2f6;
         padding-top: 0rem;
@@ -458,8 +463,8 @@ def main_page():
         if st.button("退出登录", key="logout_button", use_container_width=True):
             logout()
 
-    # 顶部导航：在登录后可以切换不同功能（Dashboard / Webhook 管理）
-    page_selection = st.sidebar.radio("功能", ["Dashboard", "Webhook 管理"], index=0)
+    # 顶部导航：在登录后可以切换不同功能（Dashboard / 项目配置管理）
+    page_selection = st.sidebar.radio("功能", ["Dashboard", "项目配置"], index=0)
     current_date = datetime.date.today()
     start_date_default = current_date - datetime.timedelta(days=7)
 
@@ -536,8 +541,8 @@ def main_page():
                 else:
                     st.info("无法显示代码行数图表：缺少必要的数据列")
             
-    if page_selection == "Webhook 管理":
-        # 直接调用独立模块渲染 Webhook 管理界面
+    if page_selection == "项目配置":
+        # 直接调用独立模块渲染项目配置管理界面
         render_webhook_management()
         return
     # Merge Request 数据展示

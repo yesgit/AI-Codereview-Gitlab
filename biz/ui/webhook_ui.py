@@ -1,8 +1,26 @@
 import streamlit as st
 import pandas as pd
 import urllib.parse
+import yaml
+import os
 
 from biz.service.webhook_service import WebhookService
+
+
+def _load_default_prompts():
+    """加载默认的 prompt 模板"""
+    try:
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'conf', 'prompt_templates.yml')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+            code_review = config.get('code_review_prompt', {})
+            return {
+                'system': code_review.get('system_prompt', ''),
+                'user': code_review.get('user_prompt', '')
+            }
+    except Exception as e:
+        st.error(f"加载默认提示词失败: {e}")
+        return {'system': '', 'user': ''}
 
 
 def _is_valid_url(u: str) -> bool:
@@ -45,17 +63,20 @@ def render_webhook_management():
         wecom_url = st.text_input("WeCom Webhook URL")
         
         st.markdown("### 自定义 Prompt 配置（可选）")
-        st.info("💡 提示：如果不填写，则使用默认的 Prompt。支持为每个项目设置专属的审查提示词。")
+        st.info("💡 提示：下方显示的是系统默认提示词，您可以修改后保存为项目专属提示词。留空则使用默认配置。")
+        
+        # 加载默认提示词
+        default_prompts = _load_default_prompts()
         
         custom_prompt_system = st.text_area(
             "System Prompt (系统提示词)",
-            placeholder="例如：你是一位资深的软件开发工程师...",
-            height=150
+            value=default_prompts['system'],
+            height=200
         )
         custom_prompt_user = st.text_area(
             "User Prompt (用户提示词)",
-            placeholder="例如：以下是某位员工向代码库提交的代码，请审查以下代码...\n可使用变量: {diffs_text}, {commits_text}",
-            height=150
+            value=default_prompts['user'],
+            height=200
         )
         
         submitted = st.form_submit_button("保存配置")
@@ -139,17 +160,20 @@ def render_webhook_management():
             wecom_url = st.text_input("WeCom Webhook URL", value=curr.get('wecom_url') or '')
             
             st.markdown("### 自定义 Prompt 配置（可选）")
+            st.info("💡 提示：如未配置自定义提示词，下方将显示系统默认提示词。您可以修改后保存为项目专属提示词。")
+            
+            # 加载默认提示词，如果数据库中没有自定义提示词，则使用默认值
+            default_prompts = _load_default_prompts()
+            
             custom_prompt_system = st.text_area(
                 "System Prompt (系统提示词)",
-                value=curr.get('custom_prompt_system') or '',
-                placeholder="例如：你是一位资深的软件开发工程师...",
-                height=150
+                value=curr.get('custom_prompt_system') or default_prompts['system'],
+                height=200
             )
             custom_prompt_user = st.text_area(
                 "User Prompt (用户提示词)",
-                value=curr.get('custom_prompt_user') or '',
-                placeholder="例如：以下是某位员工向代码库提交的代码，请审查以下代码...\n可使用变量: {diffs_text}, {commits_text}",
-                height=150
+                value=curr.get('custom_prompt_user') or default_prompts['user'],
+                height=200
             )
             
             update_btn, delete_btn = st.form_submit_button("更新配置"), st.form_submit_button("删除配置")
