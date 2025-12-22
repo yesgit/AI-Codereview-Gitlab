@@ -41,7 +41,8 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
             if len(changes) > 0:
                 project_name = webhook_data['project']['name']
                 commits_text = ';'.join(commit.get('message', '').strip() for commit in commits)
-                review_result = CodeReviewer().review_and_strip_code(str(changes), commits_text, project_name)
+                code_reviewer = CodeReviewer()
+                review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
                 score = CodeReviewer.parse_review_score(review_text=review_result)
                 for item in changes:
                     additions += item['additions']
@@ -134,10 +135,11 @@ def handle_merge_request_event(webhook_data: dict, gitlab_token: str, gitlab_url
             logger.error('Failed to get commits')
             return
 
-        # review 代码
+        # review 代码 - 使用批量审查方法
         project_name = webhook_data['project']['name']
         commits_text = ';'.join(commit['title'] for commit in commits)
-        review_result = CodeReviewer().review_and_strip_code(str(changes), commits_text, project_name)
+        code_reviewer = CodeReviewer()
+        review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
 
         # 将review结果提交到Gitlab的 notes
         handler.add_merge_request_notes(f'Auto Review Result: \n{review_result}')
@@ -193,7 +195,8 @@ def handle_github_push_event(webhook_data: dict, github_token: str, github_url: 
             if len(changes) > 0:
                 project_name = webhook_data['repository']['name']
                 commits_text = ';'.join(commit.get('message', '').strip() for commit in commits)
-                review_result = CodeReviewer().review_and_strip_code(str(changes), commits_text, project_name)
+                code_reviewer = CodeReviewer()
+                review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
                 score = CodeReviewer.parse_review_score(review_text=review_result)
                 for item in changes:
                     additions += item.get('additions', 0)
@@ -276,10 +279,11 @@ def handle_github_pull_request_event(webhook_data: dict, github_token: str, gith
             logger.error('Failed to get commits')
             return
 
-        # review 代码
+        # review 代码 - 使用批量审查方法
         project_name = webhook_data['repository']['name']
         commits_text = ';'.join(commit['title'] for commit in commits)
-        review_result = CodeReviewer().review_and_strip_code(str(changes), commits_text, project_name)
+        code_reviewer = CodeReviewer()
+        review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
 
         # 将review结果提交到GitHub的 notes
         handler.add_pull_request_notes(f'Auto Review Result: \n{review_result}')
@@ -334,7 +338,8 @@ def handle_gitea_push_event(webhook_data: dict, gitea_token: str, gitea_url: str
             if len(changes) > 0:
                 project_name = webhook_data.get('repository', {}).get('name')
                 commits_text = ';'.join(commit.get('message', '').strip() for commit in commits)
-                review_result = CodeReviewer().review_and_strip_code(str(changes), commits_text, project_name)
+                code_reviewer = CodeReviewer()
+                review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
                 score = CodeReviewer.parse_review_score(review_text=review_result)
                 for item in changes:
                     additions += item.get('additions', 0)
@@ -413,7 +418,8 @@ def handle_gitea_pull_request_event(webhook_data: dict, gitea_token: str, gitea_
 
         project_name = webhook_data.get('repository', {}).get('name')
         commits_text = ';'.join(commit.get('title', '') for commit in commits)
-        review_result = CodeReviewer().review_and_strip_code(str(changes), commits_text, project_name)
+        code_reviewer = CodeReviewer()
+        review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
 
         handler.add_pull_request_notes(f'Auto Review Result: \n{review_result}')
 
