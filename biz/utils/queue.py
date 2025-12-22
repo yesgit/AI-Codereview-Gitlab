@@ -9,11 +9,11 @@ def handle_queue(function: callable, data: any, token: str, url: str, url_slug: 
     处理异步任务，支持两种模式：
     1. RQ (Redis Queue) - 适合分布式部署
     2. Multiprocessing - 适合单机部署
-    通过环境变量 USE_REDIS_QUEUE 控制，默认使用 multiprocessing
+    通过环境变量 QUEUE_DRIVER 控制，可选值: rq / multiprocessing，默认 multiprocessing
     """
-    use_redis_queue = os.getenv('USE_REDIS_QUEUE', '0') == '1'
+    queue_driver = os.getenv('QUEUE_DRIVER', 'multiprocessing').lower()
     
-    if use_redis_queue:
+    if queue_driver == 'rq':
         try:
             from redis import Redis
             from rq import Queue
