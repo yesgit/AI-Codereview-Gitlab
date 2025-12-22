@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends supervisor && r
 
 # 复制并安装依赖
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# 使用国内镜像源加速 pip 安装，避免超时
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
 # 创建必要目录并复制公共文件
 RUN mkdir -p /app/log /app/data /app/conf
