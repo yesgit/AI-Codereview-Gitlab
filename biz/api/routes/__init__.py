@@ -1,7 +1,7 @@
 """
 路由注册模块
 """
-from biz.api.routes import home, daily_report, webhook
+from biz.api.routes import home, daily_report, webhook, admin_webhooks
 
 
 def register_routes(app):
@@ -11,3 +11,4 @@ def register_routes(app):
     app.register_blueprint(home.home_bp)
     app.register_blueprint(daily_report.daily_report_bp)
     app.register_blueprint(webhook.webhook_bp)
+    app.register_blueprint(admin_webhooks.admin_bp)

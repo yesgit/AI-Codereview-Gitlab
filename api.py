@@ -11,10 +11,13 @@ import os
 from biz.api import api_app, init_app
 from biz.api.scheduler import setup_scheduler
 from biz.utils.config_checker import check_config
+from biz.service.webhook_service import WebhookService
 
 # 初始化应用并注册路由
 init_app(api_app)
 
+# 初始化 webhook 表
+WebhookService.init_db()
 if __name__ == '__main__':
     check_config()
     # 启动定时任务调度器

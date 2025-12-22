@@ -1,8 +1,13 @@
 import json
 import requests
 import os
+import json
+import requests
+import os
 import re
+import urllib.parse
 from biz.utils.log import logger
+from biz.service.webhook_service import WebhookService
 
 
 class WeComNotifier:
@@ -21,31 +26,50 @@ class WeComNotifier:
         :return: Webhook URL
         :raises ValueError: 如果未找到 Webhook URL
         """
-        # 如果未提供 project_name，直接返回默认的 Webhook URL
-        if not project_name:
+        # 优先从数据库中读取项目级 webhook 配置
+        try:
+            mapping = WebhookService.get_webhook_mapping(project_name=project_name, url_slug=url_slug)
+            if mapping and mapping.get('wecom_url'):
+                return mapping.get('wecom_url')
+        except Exception:
+            pass
+
+        # 如果未提供 project_name 且未提供 url_slug，直接返回默认的 Webhook URL（或抛错）
+        if not project_name and not url_slug:
             if self.default_webhook_url:
                 return self.default_webhook_url
             else:
-                raise ValueError("未提供项目名称，且未设置默认的企业微信 Webhook URL。")
+                raise ValueError("未提供项目名称/slug，且未设置默认的企业微信 Webhook URL。")
 
-        # 构造目标键
-        target_key_project = f"WECOM_WEBHOOK_URL_{project_name.upper()}"
-        target_key_url_slug = f"WECOM_WEBHOOK_URL_{url_slug.upper()}"
+        def normalize(s: str) -> str:
+            if not s:
+                return ''
+            # 将字符串大写并把非字母数字字符替换为下划线
+            return re.sub(r'[^A-Z0-9]+', '_', s.upper())
 
-        # 遍历环境变量
-        for env_key, env_value in os.environ.items():
-            env_key_upper = env_key.upper()
-            if env_key_upper == target_key_project:
-                return env_value  # 找到项目名称对应的 Webhook URL，直接返回
-            if env_key_upper == target_key_url_slug:
-                return env_value  # 找到 GitLab URL 对应的 Webhook URL，直接返回
+        norm_project = normalize(project_name)
+        norm_slug = normalize(url_slug)
 
-        # 如果未找到匹配的环境变量，降级使用全局的 Webhook URL
-        if self.default_webhook_url:
-            return self.default_webhook_url
+        # 支持的环境变量候选键顺序（优先级从高到低）
+        candidates = []
+        for key in (norm_project, norm_slug):
+            if not key:
+                continue
+            candidates.extend([
+                f"WECOM_WEBHOOK_URL_{key}",
+                f"WECOM_WEBHOOK_{key}",
+            ])
 
-        # 如果既未找到匹配项，也没有默认值，抛出异常
-        raise ValueError(f"未找到项目 '{project_name}' 对应的企业微信 Webhook URL，且未设置默认的 Webhook URL。")
+        # 最后再尝试全局配置（保留原有名称兼容）
+        candidates.extend(["WECOM_WEBHOOK_URL", "WECOM_WEBHOOK_URL_DEFAULT", "WECOM_WEBHOOK"])
+
+        for cand in candidates:
+            val = os.environ.get(cand)
+            if val:
+                return val
+
+        # 如果都没有找到，抛出异常
+        raise ValueError(f"未找到项目 '{project_name or url_slug}' 对应的企业微信 Webhook URL，且未设置默认的 WebHook URL。")
 
     def format_markdown_content(self, content, title=None):
         """
@@ -146,13 +170,19 @@ class WeComNotifier:
         """ 发送请求并返回响应 """
         try:
             logger.debug(
-                f"发送企业微信消息{'分块' if chunk_num else ''} {chunk_num}/{total_chunks if chunk_num else ''}: url={post_url}, data={data}")
+                f"发送企业微信消息{'分块' if chunk_num else ''} {chunk_num}/{total_chunks if chunk_num else ''}: url={self._mask_url(post_url)}, data={data}")
             response = self._send_request(post_url, data)
 
             if response and response.get('errcode') != 0:
-                logger.error(f"企业微信消息发送失败! webhook_url:{post_url}, errmsg:{response}")
+                logger.error(f"企业微信消息发送失败! webhook_url:{self._mask_url(post_url)}, errmsg:{response}")
             else:
-                logger.info(f"企业微信消息{'分块' if chunk_num else ''}发送成功! webhook_url:{post_url}")
+                logger.info(f"企业微信消息{'分块' if chunk_num else ''}发送成功! webhook_url:{self._mask_url(post_url)}")
+
+            if response and response.get('errcode') != 0:
+                logger.error(f"企业微信消息发送失败! webhook_url:{self._mask_url(post_url)}, errmsg:{response}")
+            else:
+                logger.info(f"企业微信消息{'分块' if chunk_num else ''}发送成功! webhook_url:{self._mask_url(post_url)}")
+>>>>>>> c85976a (feat(通知): 支持每个项目独立通知 Hook；整理并扁平化测试目录)
 
         except Exception as e:
             logger.error(f"企业微信消息{'分块' if chunk_num else ''}发送失败! {e}")
@@ -164,11 +194,40 @@ class WeComNotifier:
             response.raise_for_status()  # 触发 HTTP 错误
             return response.json()
         except requests.RequestException as e:
+<<<<<<< HEAD
             logger.error(f"企业微信消息发送请求失败! url:{url}, error: {e}")
         except json.JSONDecodeError as e:
             logger.error(f"企业微信返回的 JSON 解析失败! url:{url}, error: {e}")
         return None
 
+=======
+            logger.error(f"企业微信消息发送请求失败! url:{self._mask_url(url)}, error: {e}")
+        except json.JSONDecodeError as e:
+            logger.error(f"企业微信返回的 JSON 解析失败! url:{self._mask_url(url)}, error: {e}")
+        return None
+
+    @staticmethod
+    def _mask_url(u: str) -> str:
+        """掩码 webhook URL，隐藏 query 参数或最后的 path token。"""
+        if not u:
+            return u
+        try:
+            p = urllib.parse.urlparse(u)
+            qs = urllib.parse.parse_qsl(p.query, keep_blank_values=True)
+            if qs:
+                masked_qs = [(k, '***') for k, v in qs]
+                new_query = urllib.parse.urlencode(masked_qs)
+                return urllib.parse.urlunparse((p.scheme, p.netloc, p.path, p.params, new_query, p.fragment))
+            parts = p.path.rstrip('/').split('/')
+            if parts and len(parts[-1]) > 3:
+                parts[-1] = '***'
+                new_path = '/'.join(parts)
+                return urllib.parse.urlunparse((p.scheme, p.netloc, new_path, p.params, p.query, p.fragment))
+            return u
+        except Exception:
+            return '***'
+
+>>>>>>> c85976a (feat(通知): 支持每个项目独立通知 Hook；整理并扁平化测试目录)
     def _build_message(self, content, title, msg_type, is_at_all):
         """ 构造消息 """
         if msg_type == 'text':

@@ -21,6 +21,8 @@ import matplotlib.font_manager as fm
 import streamlit as st
 
 from biz.service.review_service import ReviewService
+from biz.ui.webhook_ui import render_webhook_management
+from biz.service.webhook_service import WebhookService
 from matplotlib.ticker import MaxNLocator
 from streamlit_cookies_manager import CookieManager
 
@@ -456,6 +458,8 @@ def main_page():
         if st.button("退出登录", key="logout_button", use_container_width=True):
             logout()
 
+    # 顶部导航：在登录后可以切换不同功能（Dashboard / Webhook 管理）
+    page_selection = st.sidebar.radio("功能", ["Dashboard", "Webhook 管理"], index=0)
     current_date = datetime.date.today()
     start_date_default = current_date - datetime.timedelta(days=7)
 
@@ -531,7 +535,11 @@ def main_page():
                     generate_author_code_line_chart(df)
                 else:
                     st.info("无法显示代码行数图表：缺少必要的数据列")
-
+            
+    if page_selection == "Webhook 管理":
+        # 直接调用独立模块渲染 Webhook 管理界面
+        render_webhook_management()
+        return
     # Merge Request 数据展示
     mr_columns = ["project_name", "author", "source_branch", "target_branch", "updated_at", "commit_messages", "delta",
                   "score",
@@ -590,3 +598,9 @@ if check_login_status():
     main_page()
 else:
     login_page()
+
+# 确保在直接运行 Streamlit UI 时也初始化 webhook 表
+try:
+    WebhookService.init_db()
+except Exception:
+    pass

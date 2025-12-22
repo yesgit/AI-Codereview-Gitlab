@@ -174,7 +174,78 @@ streamlit run ui.py --server.port=5002 --server.address=0.0.0.0
 
 企业微信和飞书推送配置类似，具体参见 [常见问题](doc/faq.md)
 
+### 按项目配置独立通知 Hook
+
+如果你希望不同项目将消息推送到不同的群（或不同的机器人），可以为每个项目单独配置通知 Hook。系统选择 webhook 的优先级如下：
+
+1. 按仓库/项目名匹配的专用 Hook（优先级最高，建议使用仓库的 slug 或短名称）
+2. 按 Git 服务器（域名）匹配的 Hook
+3. 全局默认 Hook（`.env` 中的默认 `*_WEBHOOK_URL`）
+
+命名约定示例（以钉钉为例）：
+
+```
+DINGTALK_ENABLED=1
+# 默认（fallback）Webhook
+DINGTALK_WEBHOOK_URL=https://oapi.dingtalk.com/robot/send?access_token=DEFAULT_TOKEN
+
+# 针对仓库名为 `my-repo` 的项目（仓库名小写，下划线替代特殊字符）
+DINGTALK_WEBHOOK_my_repo=https://oapi.dingtalk.com/robot/send?access_token=TOKEN_FOR_MY_REPO
+
+# 针对 GitLab 服务 host 为 example.gitlab.com（点替换为下划线）
+DINGTALK_WEBHOOK_example_gitlab_com=https://oapi.dingtalk.com/robot/send?access_token=TOKEN_FOR_HOST
+```
+
+飞书和企业微信同理：把前缀改为 `FEISHU_` 或 `WECOM_`，并使用同样的命名规则（仓库名优先，主机名其次，最后使用默认 URL）。
+
+注意事项：
+- 环境变量名的匹配通常为小写仓库名或 host，将点（`.`）替换为下划线（`_`），并去掉或替换特殊字符以保证环境变量合法。
+- 修改 `.env` 后需要重启服务（Docker 容器或本地进程）以使配置生效。
+- 在本地验证：可以用一个真实的 Push / Merge Request 触发一次 webhook，或者使用单元测试和模拟请求来校验通知逻辑。
+
+#### 通过管理界面配置（推荐）
+
+为了方便运维和非技术人员管理，每个项目的通知 Hook 也可以通过系统的管理后台（Dashboard / 管理界面）进行配置：
+
+- 访问 Dashboard 管理地址（示例：`http://your-server-ip:5002`），并使用管理员账号登录。
+- 在管理界面中打开 **项目管理 / 通知设置 / Webhook 管理**（不同版本界面位置可能略有差异），选择或搜索到目标项目。
+- 点击 **新增/编辑 通知 Hook**，填写必要信息：
+  - 平台：钉钉、飞书、企业微信或自定义 webhook
+  - 名称（可选）：便于识别该 Hook 的用途
+  - Webhook URL：机器人或通知接收地址
+  - 启用开关：开启或禁用该 Hook
+  - 可选：设置匹配规则（按仓库名或 Git 主机匹配）或优先级
+- 保存后配置通常会立即生效；若未生效，可重启服务或清理缓存后重试。
+
+优势：
+- 更直观：非开发人员可以直接在后台管理通知目标，无需改 `.env` 或重启服务。
+- 更灵活：可以为同一 Git 主机或不同仓库快速配置多套 Hook，并随时启停。
+
+优先级说明：管理界面中设置的项目级 Hook 优先于环境变量中的同类配置（即：UI > 仓库名匹配 > 主机匹配 > 全局默认）。如果你同时使用 UI 和 `.env`，建议将稳定的生产配置放在 UI 中管理。
+
+
 ## 其它
+
+### 运行单元测试
+
+- 在项目根目录，激活虚拟环境后运行：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q
+```
+
+- 如果只想运行单个测试文件或用例，例如运行飞书掩码测试：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/test_notifier_masking.py::test_mask_querystring -q
+```
+
+- 说明：本项目在本地可能会被安装的第三方 pytest 插件影响（例如某些插件在导入时会触发对外部包的导入），出现类似 "ImportError: cannot import name 'OpenAI'" 之类的问题时，请使用 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` 来禁止自动加载 pytest 插件，或在干净的虚拟环境中运行测试。
+
+- 我在本地运行测试得到的结果：`8 passed in 1.00s`（运行时间会因机器差异略有不同）。
+
+- 分支说明：当前本地开发分支为 `develop`（本地历史已合并为单提交），如果需要推送到远程请先确认远程策略，必要时可使用强制推送（`git push --force`）。
+
 
 **1.如何对整个代码库进行Review?**
 

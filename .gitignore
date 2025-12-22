@@ -1,15 +1,110 @@
+<<<<<<< HEAD
+# OS
 .DS_Store
-venv/
-test/
-.idea/
+Thumbs.db
 
-log/*
+# Python virtualenvs
+.venv/
+venv/
+
+# Tests
+test/
+
+# IDEs
+.idea/
+.vscode/
+
+# Logs and runtime data
+log/
 !log/.gitkeep
-data/*
+data/
 !data/.gitkeep
 
+# Config
 conf/.env
-.pyc
+
+# Local env files
+.env
+.env.*
+
+# Python bytecode
+*.pyc
 __pycache__/
+
+# Cursor
 .cursorignore
 .cursor
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Packaging
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+
+# Docker overrides
+docker-compose.override.yml
+
+# Node modules
+node_modules/
+=======
+# OS
+.DS_Store
+Thumbs.db
+
+# Python virtualenvs
+.venv/
+venv/
+
+# Tests
+test/
+
+# IDEs
+.idea/
+.vscode/
+
+# Logs and runtime data
+log/
+!log/.gitkeep
+data/
+!data/.gitkeep
+
+# Config
+conf/.env
+
+# Python bytecode
+*.pyc
+__pycache__/
+
+# Cursor
+.cursorignore
+.cursor
+
+# Local env files
+.env
+.env.*
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Packaging
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+
+# Docker overrides
+docker-compose.override.yml
+
+# Node modules
+node_modules/
+
+>>>>>>> c85976a (feat(通知): 支持每个项目独立通知 Hook；整理并扁平化测试目录)
