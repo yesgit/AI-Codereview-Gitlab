@@ -15,14 +15,14 @@ class WebhookService:
     def init_db():
         try:
             engine = get_engine()
-            from sqlalchemy import MetaData, Table, Column, Integer, Text, UniqueConstraint
+            from sqlalchemy import MetaData, Table, Column, Integer, String, Text, UniqueConstraint
 
             metadata = MetaData()
             Table(
                 'project_webhooks', metadata,
                 Column('id', Integer, primary_key=True, autoincrement=True),
-                Column('project_name', Text, unique=True),
-                Column('url_slug', Text, unique=True),
+                Column('project_name', String(255), unique=True),
+                Column('url_slug', String(255), unique=True),
                 Column('dingtalk_url', Text),
                 Column('feishu_url', Text),
                 Column('wecom_url', Text),
@@ -33,7 +33,7 @@ class WebhookService:
             )
             metadata.create_all(engine)
         except Exception as e:
-            logger.error(f"WebhookService.init_db failed: {e}")
+            logger.error(f"❌ Database initialization failed: {e}")
 
     @staticmethod
     def create_or_update_webhook_mapping(project_name: Optional[str] = None, url_slug: Optional[str] = None,
