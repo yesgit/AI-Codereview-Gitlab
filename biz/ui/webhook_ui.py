@@ -123,7 +123,7 @@ def render_webhook_management():
                     )
                     if mapping:
                         st.success("保存成功")
-                        st.experimental_rerun()
+                        st.rerun()
                     else:
                         st.error("保存失败：可能存在冲突或数据库约束。请查看日志或使用 编辑 区进行更新/删除操作。")
 
@@ -207,7 +207,7 @@ def render_webhook_management():
                         st.success("更新成功")
                     else:
                         st.error("更新失败：未找到该配置或数据库错误")
-                    st.experimental_rerun()
+                    st.rerun()
             if delete_btn:
                 # 二次确认删除
                 confirm = st.checkbox("确认删除此配置？勾选后点击下面的确认删除按钮")
@@ -215,6 +215,6 @@ def render_webhook_management():
                     if st.button("确认删除", key=f"confirm_delete_{selected_id}"):
                         WebhookService.delete_webhook_mapping(selected_id)
                         st.success("删除成功")
-                        st.experimental_rerun()
+                        st.rerun()
     else:
         st.info("暂无可编辑的配置")
