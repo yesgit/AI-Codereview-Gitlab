@@ -23,3 +23,20 @@ services:
     env_file:
       - ./conf/.env
     restart: unless-stopped
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: changeme
+      MYSQL_DATABASE: ai_codereview
+      MYSQL_USER: aiuser
+      MYSQL_PASSWORD: aipassword
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    restart: unless-stopped
+
+volumes:
+  data:
+  log:
+  mysql_data:
