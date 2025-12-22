@@ -97,15 +97,33 @@ class CodeReviewer(BaseReviewer):
 
     def review_code(self, diffs_text: str, commits_text: str = "", project_name: str = "") -> str:
         """Review 代码并返回结果"""
-        normalized_project_name = project_name.replace("-", "_") if project_name else project_name
-        project_prompts_path = os.getenv(f"{normalized_project_name.upper()}_PROMPT", None)
-
-        # 按需重新加载 prompts 配置， 同时也可以支持项目级别提示词的热加载
-        prompts = (
-            self._load_prompts(prompt_key="code_review_prompt", prompt_templates_file=project_prompts_path)
-            if project_prompts_path
-            else self.prompts
-        )
+        # 优先从数据库获取项目级自定义 prompt
+        prompts = None
+        if project_name:
+            try:
+                from biz.service.webhook_service import WebhookService
+                mapping = WebhookService.get_webhook_mapping(project_name=project_name)
+                if mapping and mapping.get('custom_prompt_system') and mapping.get('custom_prompt_user'):
+                    # 使用数据库中的自定义 prompt
+                    prompts = {
+                        "system_message": {"role": "system", "content": mapping.get('custom_prompt_system')},
+                        "user_message": {"role": "user", "content": mapping.get('custom_prompt_user')},
+                    }
+                    logger.info(f"使用项目 {project_name} 的自定义 prompt（从数据库读取）")
+            except Exception as e:
+                logger.warning(f"获取项目 {project_name} 的自定义 prompt 失败: {e}")
+        
+        # 如果数据库没有自定义 prompt，尝试从环境变量获取文件路径（向后兼容）
+        if not prompts and project_name:
+            normalized_project_name = project_name.replace("-", "_")
+            project_prompts_path = os.getenv(f"{normalized_project_name.upper()}_PROMPT", None)
+            if project_prompts_path:
+                prompts = self._load_prompts(prompt_key="code_review_prompt", prompt_templates_file=project_prompts_path)
+                logger.info(f"使用环境变量配置的 prompt 模板文件: {project_prompts_path}")
+        
+        # 如果都没有配置，使用默认 prompts
+        if not prompts:
+            prompts = self.prompts
         messages = [
             prompts["system_message"],
             {

@@ -16,7 +16,7 @@ def _is_valid_url(u: str) -> bool:
 
 
 def render_webhook_management():
-    st.header("Webhook 管理")
+    st.header("项目配置管理")
 
     # 列出当前映射
     mappings = WebhookService.get_all_webhook_mappings()
@@ -24,23 +24,41 @@ def render_webhook_management():
         try:
             df = pd.DataFrame(mappings)
             # 显示主要字段
-            st.dataframe(df[['id', 'project_name', 'url_slug', 'dingtalk_url', 'feishu_url', 'wecom_url']])
+            display_cols = ['id', 'project_name', 'url_slug', 'dingtalk_url', 'feishu_url', 'wecom_url']
+            st.dataframe(df[display_cols])
         except Exception:
             st.write(mappings)
     else:
-        st.info("目前没有配置任何项目 Webhook 映射")
+        st.info("目前没有配置任何项目")
 
     st.markdown("---")
 
     # 创建新映射的表单
     with st.form("create_webhook_form"):
-        st.subheader("新建 / 更新 映射（按 project_name 或 url_slug 匹配）")
+        st.subheader("新建 / 更新 项目配置（按 project_name 或 url_slug 匹配）")
         project_name = st.text_input("项目名称 (project_name)")
         url_slug = st.text_input("URL Slug (url_slug)")
+        
+        st.markdown("### Webhook 配置")
         dingtalk_url = st.text_input("DingTalk Webhook URL")
         feishu_url = st.text_input("Feishu Webhook URL")
         wecom_url = st.text_input("WeCom Webhook URL")
-        submitted = st.form_submit_button("保存映射")
+        
+        st.markdown("### 自定义 Prompt 配置（可选）")
+        st.info("💡 提示：如果不填写，则使用默认的 Prompt。支持为每个项目设置专属的审查提示词。")
+        
+        custom_prompt_system = st.text_area(
+            "System Prompt (系统提示词)",
+            placeholder="例如：你是一位资深的软件开发工程师...",
+            height=150
+        )
+        custom_prompt_user = st.text_area(
+            "User Prompt (用户提示词)",
+            placeholder="例如：以下是某位员工向代码库提交的代码，请审查以下代码...\n可使用变量: {diffs_text}, {commits_text}",
+            height=150
+        )
+        
+        submitted = st.form_submit_button("保存配置")
         if submitted:
             # 基本校验：必须提供 project_name 或 url_slug
             if not project_name and not url_slug:
@@ -62,7 +80,7 @@ def render_webhook_management():
                 if dup_errors:
                     for e in dup_errors:
                         st.error(e)
-                    st.info("如确实要更新该映射，请在 编辑 区选择对应 ID 并使用 更新 操作；或先删除旧的映射。")
+                    st.info("如确实要更新该配置，请在 编辑 区选择对应 ID 并使用 更新 操作；或先删除旧的配置。")
                     st.stop()
                 # 校验 URL 格式
                 bad_urls = []
@@ -73,11 +91,15 @@ def render_webhook_management():
                     for m in bad_urls:
                         st.error(m)
                 else:
-                    mapping = WebhookService.create_or_update_webhook_mapping(project_name=project_name or None,
-                                                            url_slug=url_slug or None,
-                                                            dingtalk_url=dingtalk_url or None,
-                                                            feishu_url=feishu_url or None,
-                                                            wecom_url=wecom_url or None)
+                    mapping = WebhookService.create_or_update_webhook_mapping(
+                        project_name=project_name or None,
+                        url_slug=url_slug or None,
+                        dingtalk_url=dingtalk_url or None,
+                        feishu_url=feishu_url or None,
+                        wecom_url=wecom_url or None,
+                        custom_prompt_system=custom_prompt_system or None,
+                        custom_prompt_user=custom_prompt_user or None
+                    )
                     if mapping:
                         st.success("保存成功")
                         st.experimental_rerun()
@@ -87,11 +109,11 @@ def render_webhook_management():
     st.markdown("---")
 
     # 编辑 / 删除 已有映射
-    st.subheader("编辑 / 删除 映射")
+    st.subheader("编辑 / 删除 项目配置")
     mappings = WebhookService.get_all_webhook_mappings()
     id_map = {m.get('id') if isinstance(m, dict) else m[0]: m for m in mappings} if mappings else {}
     if id_map:
-        selected_id = st.selectbox("选择映射 ID", options=sorted(list(id_map.keys())))
+        selected_id = st.selectbox("选择配置 ID", options=sorted(list(id_map.keys())))
         mapping = id_map.get(selected_id)
         # 支持 dict 或 tuple 映射
         if isinstance(mapping, dict):
@@ -110,10 +132,27 @@ def render_webhook_management():
         with st.form("edit_webhook_form"):
             project_name = st.text_input("项目名称 (project_name)", value=curr.get('project_name') or '')
             url_slug = st.text_input("URL Slug (url_slug)", value=curr.get('url_slug') or '')
+            
+            st.markdown("### Webhook 配置")
             dingtalk_url = st.text_input("DingTalk Webhook URL", value=curr.get('dingtalk_url') or '')
             feishu_url = st.text_input("Feishu Webhook URL", value=curr.get('feishu_url') or '')
             wecom_url = st.text_input("WeCom Webhook URL", value=curr.get('wecom_url') or '')
-            update_btn, delete_btn = st.form_submit_button("更新映射"), st.form_submit_button("删除映射")
+            
+            st.markdown("### 自定义 Prompt 配置（可选）")
+            custom_prompt_system = st.text_area(
+                "System Prompt (系统提示词)",
+                value=curr.get('custom_prompt_system') or '',
+                placeholder="例如：你是一位资深的软件开发工程师...",
+                height=150
+            )
+            custom_prompt_user = st.text_area(
+                "User Prompt (用户提示词)",
+                value=curr.get('custom_prompt_user') or '',
+                placeholder="例如：以下是某位员工向代码库提交的代码，请审查以下代码...\n可使用变量: {diffs_text}, {commits_text}",
+                height=150
+            )
+            
+            update_btn, delete_btn = st.form_submit_button("更新配置"), st.form_submit_button("删除配置")
             if update_btn:
                 # 更新前检查冲突（除当前记录外）
                 conflicts = []
@@ -130,23 +169,28 @@ def render_webhook_management():
                         st.error(c)
                     st.info("解决冲突后重试，或先删除冲突的记录。")
                 else:
-                    ok = WebhookService.update_webhook_mapping_by_id(selected_id, project_name=project_name or None,
-                                                                     url_slug=url_slug or None,
-                                                                     dingtalk_url=dingtalk_url or None,
-                                                                     feishu_url=feishu_url or None,
-                                                                     wecom_url=wecom_url or None)
+                    ok = WebhookService.update_webhook_mapping_by_id(
+                        selected_id,
+                        project_name=project_name or None,
+                        url_slug=url_slug or None,
+                        dingtalk_url=dingtalk_url or None,
+                        feishu_url=feishu_url or None,
+                        wecom_url=wecom_url or None,
+                        custom_prompt_system=custom_prompt_system or None,
+                        custom_prompt_user=custom_prompt_user or None
+                    )
                     if ok:
                         st.success("更新成功")
                     else:
-                        st.error("更新失败：未找到该映射或数据库错误")
+                        st.error("更新失败：未找到该配置或数据库错误")
                     st.experimental_rerun()
             if delete_btn:
                 # 二次确认删除
-                confirm = st.checkbox("确认删除此映射？勾选后点击下面的确认删除按钮")
+                confirm = st.checkbox("确认删除此配置？勾选后点击下面的确认删除按钮")
                 if confirm:
                     if st.button("确认删除", key=f"confirm_delete_{selected_id}"):
                         WebhookService.delete_webhook_mapping(selected_id)
                         st.success("删除成功")
                         st.experimental_rerun()
     else:
-        st.info("暂无可编辑的映射")
+        st.info("暂无可编辑的配置")
