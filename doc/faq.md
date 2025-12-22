@@ -85,30 +85,6 @@ OLLAMA_API_BASE_URL=http://127.0.0.1:11434  # 错误
 OLLAMA_API_BASE_URL=http://{宿主机/外网IP地址}:11434  # 正确
 ```
 
-### 如何使用Redis Queue队列？
-
-**操作步骤**
-
-1.开发调试模式下，启动容器：
-
-```
-docker compose -f docker-compose.rq.yml up -d
-```
-
-2.生产模式下，启动容器：
-
-```
-docker compose -f docker-compose.prod.yml up -d
-```
-
-**特别说明：**
-
-在 .env 文件中配置 WORKER_QUEUE，其值为 GitLab 域名，并将域名中的点（.）替换为下划线（_）。如果域名为 gitlab.test.cn，则配置为：
-
-```
-WORKER_QUEUE=gitlab_test_cn
-```
-
 ### 如何配置企业微信和飞书消息推送？
 
 **1.配置企业微信推送**

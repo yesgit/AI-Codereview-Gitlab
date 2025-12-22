@@ -5,7 +5,7 @@
 import os
 from unittest import TestCase, main
 
-from biz.github.webhook_handler import PushHandler
+from biz.platforms.github.webhook_handler import PushHandler
 
 
 # @Describe:

@@ -1,5 +1,5 @@
 # 使用官方的 Python 基础镜像
-FROM python:3.10-slim AS base
+FROM python:3.10-slim
 
 # 设置工作目录
 WORKDIR /app
@@ -19,14 +19,10 @@ COPY fonts ./fonts
 COPY api.py ./api.py
 COPY ui.py ./ui.py
 COPY conf/prompt_templates.yml ./conf/prompt_templates.yml
+COPY conf/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# 使用 supervisord 作为启动命令
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
-
-FROM base AS app
-COPY conf/supervisord.app.conf /etc/supervisor/conf.d/supervisord.conf
 # 暴露 Flask 和 Streamlit 的端口
 EXPOSE 5001 5002
 
-FROM base AS worker
-COPY ./conf/supervisord.worker.conf /etc/supervisor/conf.d/supervisord.conf
+# 使用 supervisord 作为启动命令
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

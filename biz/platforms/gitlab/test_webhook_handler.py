@@ -4,7 +4,7 @@
 # @Author  : Arrow
 from unittest import TestCase, main
 
-from biz.gitlab.webhook_handler import PushHandler
+from biz.platforms.gitlab.webhook_handler import PushHandler
 
 
 # @Describe:

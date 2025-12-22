@@ -6,7 +6,7 @@ import os
 from urllib.parse import urlparse
 from flask import Blueprint, request, jsonify
 
-from biz.gitlab.webhook_handler import slugify_url
+from biz.platforms.gitlab.webhook_handler import slugify_url
 from biz.queue.worker import (
     handle_merge_request_event,
     handle_push_event,
