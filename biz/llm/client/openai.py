@@ -5,6 +5,7 @@ from openai import OpenAI
 
 from biz.llm.client.base import BaseClient
 from biz.llm.types import NotGiven, NOT_GIVEN
+from biz.utils.log import logger
 
 
 class OpenAIClient(BaseClient):
@@ -14,8 +15,19 @@ class OpenAIClient(BaseClient):
         if not self.api_key:
             raise ValueError("API key is required. Please provide it or set it in the environment variables.")
 
-        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        # 配置重试参数，支持限流重试
+        max_retries = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
+        timeout = float(os.getenv("OPENAI_TIMEOUT", "60.0"))
+        
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            max_retries=max_retries,  # 最大重试次数，默认3次
+            timeout=timeout,  # 请求超时时间（秒），默认60秒
+        )
         self.default_model = os.getenv("OPENAI_API_MODEL", "gpt-4o-mini")
+        
+        logger.info(f"OpenAI 客户端初始化成功，重试次数: {max_retries}, 超时时间: {timeout}秒")
 
     def completions(self,
                     messages: List[Dict[str, str]],
