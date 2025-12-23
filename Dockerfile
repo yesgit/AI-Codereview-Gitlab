@@ -4,8 +4,11 @@ FROM python:3.10-slim AS base
 # 设置工作目录
 WORKDIR /app
 
-# 安装 supervisord 作为进程管理工具
-RUN apt-get update && apt-get install -y --no-install-recommends supervisor && rm -rf /var/lib/apt/lists/*
+# 安装 supervisord 和 MySQL 客户端作为进程管理工具
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    supervisor \
+    default-mysql-client \
+    && rm -rf /var/lib/apt/lists/*
 
 # 复制并安装依赖
 COPY requirements.txt ./
@@ -20,14 +23,26 @@ COPY api.py ./api.py
 COPY ui.py ./ui.py
 COPY conf/prompt_templates.yml ./conf/prompt_templates.yml
 
+# 复制 Alembic 数据库迁移文件
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
+
+# 复制 Docker 入口脚本并设置权限
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # App stage：用于运行 Web 应用（Flask + Streamlit）
 FROM base AS app
 COPY conf/supervisord.app.conf /etc/supervisor/conf.d/supervisord.conf
 # 暴露 Flask 和 Streamlit 的端口
 EXPOSE 5001 5002
+# 使用入口脚本自动执行数据库迁移
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 # Worker stage：用于运行后台任务队列/worker
 FROM base AS worker
 COPY conf/supervisord.worker.conf /etc/supervisor/conf.d/supervisord.conf
+# 使用入口脚本自动执行数据库迁移
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
