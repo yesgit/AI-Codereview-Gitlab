@@ -1,13 +1,14 @@
 services:
+  # Streamlit UI
   app:
     build:
       context: .
       dockerfile: Dockerfile
       target: app
-    image: docker.io/hedw/ai-codereview-gitlab:1.4.0
+    image: docker.io/hedw/ai-codereview-gitlab:1.4.1
     ports:
-      - "5001:5001"
-      - "5002:5002"
+      - "5001:5001"      # Flask API
+      - "5002:5002"      # Streamlit UI
     volumes:
       - ./data:/app/data
       - ./log:/app/log
@@ -24,7 +25,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    image: docker.io/hedw/ai-codereview-gitlab-worker:1.4.0
+    image: docker.io/hedw/ai-codereview-gitlab-worker:1.4.1
     env_file:
       - ./conf/.env
     depends_on:
@@ -35,8 +36,8 @@ services:
     restart: unless-stopped
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"  # 不暴露到主机，避免端口冲突
     restart: unless-stopped
   mysql:
     image: mysql:8.0

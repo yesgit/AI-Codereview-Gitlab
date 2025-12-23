@@ -1,19 +1,25 @@
 # 使用官方的 Python 基础镜像作为基础层
-FROM python:3.10-slim AS base
+FROM python:3.11-slim AS base
 
 # 设置工作目录
 WORKDIR /app
 
-# 安装 supervisord 和 MySQL 客户端作为进程管理工具
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    supervisor \
-    default-mysql-client \
-    && rm -rf /var/lib/apt/lists/*
+# 安装 supervisord、MySQL 客户端和其他依赖
+# 添加重试机制应对网络问题
+RUN apt-get update && \
+    for i in 1 2 3; do apt-get install -y --no-install-recommends \
+        supervisor \
+        default-mysql-client \
+        unzip \
+        curl \
+        && break || sleep 5; done && \
+    rm -rf /var/lib/apt/lists/*
 
 # 复制并安装依赖
 COPY requirements.txt ./
-# 使用国内镜像源加速 pip 安装，避免超时
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+# 使用国内镜像源加速 pip 安装，启用 cache 提高速度
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
 # 创建必要目录并复制公共文件
 RUN mkdir -p /app/log /app/data /app/conf
@@ -38,11 +44,11 @@ COPY conf/supervisord.app.conf /etc/supervisor/conf.d/supervisord.conf
 EXPOSE 5001 5002
 # 使用入口脚本自动执行数据库迁移
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 # Worker stage：用于运行后台任务队列/worker
 FROM base AS worker
 COPY conf/supervisord.worker.conf /etc/supervisor/conf.d/supervisord.conf
 # 使用入口脚本自动执行数据库迁移
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

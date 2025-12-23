@@ -14,7 +14,8 @@
   - 基于 GitLab & GitHub & Gitea Commit 记录，自动整理每日开发进展，谁在摸鱼、谁在卷，一目了然 😼。
 - 📊 可视化 Dashboard
   - 集中展示所有 Code Review 记录，项目统计、开发者统计，数据说话，甩锅无门！
-- 🎭 Review Style 任你选
+  - � **新增 Reflex 现代化界面**：Material Design 风格，响应式设计，更美观更流畅！
+- �🎭 Review Style 任你选
   - 专业型 🤵：严谨细致，正式专业。 
   - 讽刺型 😈：毒舌吐槽，专治不服（"这代码是用脚写的吗？"） 
   - 绅士型 🌸：温柔建议，如沐春风（"或许这里可以再优化一下呢~"） 
@@ -223,6 +224,63 @@ DINGTALK_WEBHOOK_example_gitlab_com=https://oapi.dingtalk.com/robot/send?access_
 
 优先级说明：管理界面中设置的项目级 Hook 优先于环境变量中的同类配置（即：UI > 仓库名匹配 > 主机匹配 > 全局默认）。如果你同时使用 UI 和 `.env`，建议将稳定的生产配置放在 UI 中管理。
 
+
+## 🎨 Reflex 现代化界面（新增）
+
+我们为平台开发了**全新的 Reflex 现代化界面**，提供更优雅的用户体验！
+
+### 特性
+
+- ✨ Material Design 风格设计
+- 🚀 响应式布局，完美适配移动端
+- 🎨 渐变色彩和流畅动画
+- ⚡ 更快的响应速度（React 渲染）
+- 💡 直观的用户操作体验
+
+### 快速开始
+
+**1. 安装依赖**
+
+```bash
+pip install -r requirements.txt
+```
+
+**2. 初始化 Reflex**
+
+```bash
+reflex init
+```
+
+**3. 启动 Reflex 界面**
+
+```bash
+# 方式一：使用 reflex 命令（推荐）
+reflex run
+
+# 方式二：使用启动脚本
+python run_reflex.py
+```
+
+**4. 访问界面**
+
+打开浏览器访问：**http://localhost:3000**
+
+默认登录账号：`admin` / `admin`
+
+### 界面对比
+
+| 版本 | 端口 | 技术栈 | 启动命令 |
+|------|------|--------|----------|
+| Streamlit 版本 | 5002 | Streamlit | `streamlit run ui.py` |
+| Reflex 版本 (新) | 3000 | Reflex + React | `reflex run` |
+
+两个版本可以**同时运行**，互不干扰！
+
+### 详细文档
+
+查看完整使用指南：[Reflex UI 使用指南](doc/reflex_ui_guide.md)
+
+---
 
 ## 其它
 

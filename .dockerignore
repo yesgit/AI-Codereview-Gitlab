@@ -1,17 +1,4 @@
-.venv
 data
-<<<<<<< HEAD
-log
-=======
-log
-__pycache__
-.pytest_cache
-.mypy_cache
-.venv/
-.env
-.env.*
-.git
-.gitignore
 log
 __pycache__
 .pytest_cache

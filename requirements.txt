@@ -23,3 +23,7 @@ tiktoken==0.9.0
 zhipuai==2.1.5.20230904
 pytest==7.4.0
 pytest-mock==3.11.0
+# Reflex 前端框架
+reflex>=0.4.0
+plotly>=5.18.0
+kaleido>=0.2.1

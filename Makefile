@@ -19,14 +19,14 @@ build: build-app build-worker
 build-app:
 	@echo "构建 app 镜像: $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION) for $(PLATFORM)"
 	# 使用 buildx，--load 会将镜像加载到本地 docker（需要 buildx driver 支持）
-	# --no-cache 确保使用最新代码而不是缓存
-	docker buildx build --platform $(PLATFORM) --no-cache --load -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION) \
+	# 确保使用最新代码而不是缓存
+	docker buildx build --platform $(PLATFORM) --load -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION) \
 		-f Dockerfile --target app .
 
 build-worker:
 	@echo "构建 worker 镜像: $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION)-worker for $(PLATFORM)"
-	# --no-cache 确保使用最新代码而不是缓存
-	docker buildx build --platform $(PLATFORM) --no-cache --load -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION)-worker \
+	# 确保使用最新代码而不是缓存
+	docker buildx build --platform $(PLATFORM) --load -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION)-worker \
 		-f Dockerfile --target worker .
 
 clean-images:
