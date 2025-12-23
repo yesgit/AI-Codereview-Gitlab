@@ -15,76 +15,94 @@ class FeishuNotifier:
         self.default_webhook_url = webhook_url or os.environ.get('FEISHU_WEBHOOK_URL', '')
         self.enabled = os.environ.get('FEISHU_ENABLED', '0') == '1'
 
-    def _get_webhook_url(self, project_name=None, url_slug=None):
+    def _get_webhook_url(self, gitlab_base_url=None, project_slug=None, branch_name=None,
+                        project_name=None, url_slug=None):
         """
-        获取项目对应的 Webhook URL，优先从数据库读取 project-level 配置，回退到环境变量和默认值。
-        :param project_name: 项目名称
-        :param url_slug: 仓库 url slug
-        :return: Webhook URL
-        :raises ValueError: 如果未找到 Webhook URL
+        获取飞书webhook URL，支持三级回退
+        
+        Args:
+            gitlab_base_url: GitLab实例地址
+            project_slug: 项目slug
+            branch_name: 分支名称
+            project_name: 项目名称（兼容旧方式）
+            url_slug: URL slug（兼容旧方式）
         """
-        # 优先从数据库中读取项目级 webhook 配置
         try:
-            mapping = WebhookService.get_webhook_mapping(project_name=project_name, url_slug=url_slug)
-            if mapping and mapping.get('feishu_url'):
-                return mapping.get('feishu_url')
-        except Exception:
-            # 若 DB 不可用或查询失败，则回退到环境变量逻辑
-            pass
+            # 使用统一的配置获取方法，支持三级回退
+            config = WebhookService.get_webhook_config_with_fallback(
+                gitlab_base_url=gitlab_base_url,
+                project_slug=project_slug,
+                branch_name=branch_name,
+                project_name=project_name,
+                url_slug=url_slug
+            )
+            
+            # 从配置中获取飞书URL
+            if config and config.get('feishu_url'):
+                return config.get('feishu_url')
+        except Exception as e:
+            logger.debug(f"获取配置失败: {e}")
 
-        # 如果未提供 project_name 且未提供 url_slug，直接返回默认的 Webhook URL（或抛错）
-        if not project_name and not url_slug:
-            if self.default_webhook_url:
-                return self.default_webhook_url
-            else:
-                raise ValueError("未提供项目名称/slug，且未设置默认的 飞书 Webhook URL。")
+        # 兼容旧的环境变量查找逻辑（用于向后兼容）
+        if not gitlab_base_url and not project_slug and (project_name or url_slug):
+            def normalize(s: str) -> str:
+                if not s:
+                    return ''
+                return re.sub(r'[^A-Z0-9]+', '_', s.upper())
 
-        def normalize(s: str) -> str:
-            if not s:
-                return ''
-            # 将字符串大写并把非字母数字字符替换为下划线
-            return re.sub(r'[^A-Z0-9]+', '_', s.upper())
+            norm_project = normalize(project_name)
+            norm_slug = normalize(url_slug)
 
-        norm_project = normalize(project_name)
-        norm_slug = normalize(url_slug)
+            candidates = []
+            for key in (norm_project, norm_slug):
+                if not key:
+                    continue
+                candidates.extend([
+                    f"FEISHU_WEBHOOK_URL_{key}",
+                    f"FEISHU_WEBHOOK_{key}",
+                ])
+            candidates.extend(["FEISHU_WEBHOOK_URL", "FEISHU_WEBHOOK_URL_DEFAULT", "FEISHU_WEBHOOK"])
 
-        # 支持的环境变量候选键顺序（优先级从高到低）
-        candidates = []
-        for key in (norm_project, norm_slug):
-            if not key:
-                continue
-            candidates.extend([
-                f"FEISHU_WEBHOOK_URL_{key}",
-                f"FEISHU_WEBHOOK_{key}",
-            ])
+            for cand in candidates:
+                val = os.environ.get(cand)
+                if val:
+                    return val
 
-        # 最后再尝试全局配置（保留原有名称兼容）
-        candidates.extend(["FEISHU_WEBHOOK_URL", "FEISHU_WEBHOOK_URL_DEFAULT", "FEISHU_WEBHOOK"])
+        # 最终回退：使用默认URL
+        if self.default_webhook_url:
+            return self.default_webhook_url
 
-        for cand in candidates:
-            val = os.environ.get(cand)
-            if val:
-                return val
+        raise ValueError("未找到飞书 Webhook URL，请检查配置。")
 
-        # 如果都没有找到，抛出异常
-        raise ValueError(f"未找到项目 '{project_name or url_slug}' 对应的 Feishu Webhook URL，且未设置默认的 Webhook URL。")
-
-    def send_message(self, content, msg_type='text', title=None, is_at_all=False, project_name=None, url_slug=None):
+    def send_message(self, content, msg_type='text', title=None, is_at_all=False,
+                     gitlab_base_url=None, project_slug=None, branch_name=None,
+                     project_name=None, url_slug=None):
         """
         发送飞书消息
-        :param content: 消息内容
-        :param msg_type: 消息类型，支持text和markdown
-        :param title: 消息标题(markdown类型时使用)
-        :param is_at_all: 是否@所有人
-        :param project_name: 项目名称
-        :param url_slug: 仓库 slug
+        
+        Args:
+            content: 消息内容
+            msg_type: 消息类型，支持text和markdown
+            title: 消息标题(markdown类型时使用)
+            is_at_all: 是否@所有人
+            gitlab_base_url: GitLab实例地址
+            project_slug: 项目slug
+            branch_name: 分支名称
+            project_name: 项目名称（兼容旧方式）
+            url_slug: URL slug（兼容旧方式）
         """
         if not self.enabled:
             logger.info("飞书推送未启用")
             return
 
         try:
-            post_url = self._get_webhook_url(project_name=project_name, url_slug=url_slug)
+            post_url = self._get_webhook_url(
+                gitlab_base_url=gitlab_base_url,
+                project_slug=project_slug,
+                branch_name=branch_name,
+                project_name=project_name,
+                url_slug=url_slug
+            )
             if msg_type == 'markdown':
                 data = {
                     "msg_type": "interactive",

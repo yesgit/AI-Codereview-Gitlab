@@ -21,7 +21,7 @@ import matplotlib.font_manager as fm
 import streamlit as st
 
 from biz.service.review_service import ReviewService
-from biz.ui.webhook_ui import render_webhook_management
+from biz.ui.webhook_ui import render_webhook_management, render_branch_webhook_management
 from biz.service.webhook_service import WebhookService
 from matplotlib.ticker import MaxNLocator
 from streamlit_cookies_manager import CookieManager
@@ -455,16 +455,31 @@ def logout():
 
 # 主要内容
 def main_page():
+    # 顶部导航：在登录后可以切换不同功能
+    page_selection = st.sidebar.radio("功能", ["代码审查统计", "项目配置", "分支配置"], index=0)
+    
     # 将标题和退出按钮放在同一行
     col_title, col_space, col_logout = st.columns([7, 2, 1.2])
     with col_title:
-        st.markdown("#### 📊 代码审查统计")
+        # 根据选择的页面显示不同的标题
+        if page_selection == "代码审查统计":
+            st.markdown("#### 📊 代码审查统计")
+        elif page_selection == "项目配置":
+            st.markdown("#### ⚙️ 项目配置管理")
+        elif page_selection == "分支配置":
+            st.markdown("#### 🌿 分支配置管理")
     with col_logout:
         if st.button("退出登录", key="logout_button", use_container_width=True):
             logout()
-
-    # 顶部导航：在登录后可以切换不同功能（Dashboard / 项目配置管理）
-    page_selection = st.sidebar.radio("功能", ["Dashboard", "项目配置"], index=0)
+    # 如果是配置页面，直接渲染对应页面并返回
+    if page_selection == "项目配置":
+        render_webhook_management()
+        return
+    elif page_selection == "分支配置":
+        render_branch_webhook_management()
+        return
+    
+    # 以下是 Dashboard 页面的内容
     current_date = datetime.date.today()
     start_date_default = current_date - datetime.timedelta(days=7)
 
@@ -540,11 +555,7 @@ def main_page():
                     generate_author_code_line_chart(df)
                 else:
                     st.info("无法显示代码行数图表：缺少必要的数据列")
-            
-    if page_selection == "项目配置":
-        # 直接调用独立模块渲染项目配置管理界面
-        render_webhook_management()
-        return
+    
     # Merge Request 数据展示
     mr_columns = ["project_name", "author", "source_branch", "target_branch", "updated_at", "commit_messages", "delta",
                   "score",

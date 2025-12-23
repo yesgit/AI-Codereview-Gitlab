@@ -1,11 +1,54 @@
 import os
 import re
 import time
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 import fnmatch
 import requests
 
 from biz.utils.log import logger
+
+
+def extract_gitlab_info(webhook_data: dict) -> tuple:
+    """
+    从GitLab webhook数据中提取GitLab base URL和project slug
+    
+    Args:
+        webhook_data: GitLab webhook数据
+        
+    Returns:
+        tuple: (gitlab_base_url, project_slug)
+        - gitlab_base_url: GitLab实例地址，如 https://gitlab.com
+        - project_slug: 项目slug，如 mygroup/myproject
+    """
+    gitlab_base_url = ''
+    project_slug = ''
+    
+    try:
+        project = webhook_data.get('project', {})
+        
+        # 获取project_slug (path_with_namespace)
+        project_slug = project.get('path_with_namespace', '')
+        
+        # 从web_url提取gitlab_base_url
+        web_url = project.get('web_url', '')
+        if web_url:
+            parsed = urlparse(web_url)
+            gitlab_base_url = f"{parsed.scheme}://{parsed.netloc}"
+        
+        # 如果web_url不存在，尝试从homepage获取
+        if not gitlab_base_url:
+            repository = webhook_data.get('repository', {})
+            homepage = repository.get('homepage', '')
+            if homepage:
+                parsed = urlparse(homepage)
+                gitlab_base_url = f"{parsed.scheme}://{parsed.netloc}"
+        
+        logger.debug(f"提取GitLab信息: base_url={gitlab_base_url}, project_slug={project_slug}")
+        
+    except Exception as e:
+        logger.warning(f"提取GitLab信息失败: {e}")
+    
+    return gitlab_base_url, project_slug
 
 
 def filter_changes(changes: list):

@@ -3,6 +3,7 @@ from blinker import Signal
 from biz.entity.review_entity import MergeRequestReviewEntity, PushReviewEntity
 from biz.service.review_service import ReviewService
 from biz.utils.im import notifier
+from biz.platforms.gitlab.webhook_handler import extract_gitlab_info
 
 # 定义全局事件管理器（事件信号）
 event_manager = {
@@ -31,9 +32,21 @@ def on_merge_request_reviewed(mr_review_entity: MergeRequestReviewEntity):
 
 {mr_review_entity.review_result}
     """
-    notifier.send_notification(content=im_msg, msg_type='markdown', title='Merge Request Review',
-                               project_name=mr_review_entity.project_name, url_slug=mr_review_entity.url_slug,
-                               webhook_data=mr_review_entity.webhook_data)
+    
+    # 从webhook数据中提取GitLab信息
+    gitlab_base_url, project_slug = extract_gitlab_info(mr_review_entity.webhook_data or {})
+    
+    notifier.send_notification(
+        content=im_msg, 
+        msg_type='markdown', 
+        title='Merge Request Review',
+        gitlab_base_url=gitlab_base_url,
+        project_slug=project_slug,
+        branch_name=mr_review_entity.source_branch,  # 使用源分支作为分支名
+        project_name=mr_review_entity.project_name,  # 保留兼容性
+        url_slug=mr_review_entity.url_slug,  # 保留兼容性
+        webhook_data=mr_review_entity.webhook_data
+    )
 
     # 记录到数据库
     ReviewService().insert_mr_review_log(mr_review_entity)
@@ -58,9 +71,21 @@ def on_push_reviewed(entity: PushReviewEntity):
 
     if entity.review_result:
         im_msg += f"#### AI Review 结果: \n {entity.review_result}\n\n"
-    notifier.send_notification(content=im_msg, msg_type='markdown',title=f"{entity.project_name} Push Event",
-                               project_name=entity.project_name, url_slug=entity.url_slug,
-                               webhook_data=entity.webhook_data)
+    
+    # 从webhook数据中提取GitLab信息
+    gitlab_base_url, project_slug = extract_gitlab_info(entity.webhook_data or {})
+    
+    notifier.send_notification(
+        content=im_msg, 
+        msg_type='markdown',
+        title=f"{entity.project_name} Push Event",
+        gitlab_base_url=gitlab_base_url,
+        project_slug=project_slug,
+        branch_name=entity.branch,  # 使用推送的分支名
+        project_name=entity.project_name,  # 保留兼容性
+        url_slug=entity.url_slug,  # 保留兼容性
+        webhook_data=entity.webhook_data
+    )
 
     # 记录到数据库
     ReviewService().insert_push_review_log(entity)
