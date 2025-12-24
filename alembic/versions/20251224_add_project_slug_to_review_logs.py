@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '20251224_project_slug'
-down_revision = '20251223_branch_webhooks'
+down_revision = '20251223_gitlab_token'
 branch_labels = None
 depends_on = None
 
