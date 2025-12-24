@@ -49,6 +49,21 @@ def slugify_url(original_url: str) -> str:
     return target
 
 
+def _normalize_base_url(u: str) -> str:
+    """Ensure base URL has a scheme and trailing slash suitable for urljoin.
+
+    If caller provided a URL without scheme (e.g. gitlab.com), default to https://.
+    """
+    if not u:
+        return None
+    u = u.strip()
+    if not u.startswith(('http://', 'https://')):
+        u = 'https://' + u
+    if not u.endswith('/'):
+        u = u + '/'
+    return u
+
+
 class MergeRequestHandler:
     def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str):
         self.merge_request_iid = None
@@ -72,21 +87,6 @@ class MergeRequestHandler:
         self.merge_request_iid = merge_request.get('iid')
         self.project_id = merge_request.get('target_project_id')
         self.action = merge_request.get('action')
-
-
-def _normalize_base_url(u: str) -> str:
-    """Ensure base URL has a scheme and trailing slash suitable for urljoin.
-
-    If caller provided a URL without scheme (e.g. gitlab.com), default to https://.
-    """
-    if not u:
-        return None
-    u = u.strip()
-    if not u.startswith(('http://', 'https://')):
-        u = 'https://' + u
-    if not u.endswith('/'):
-        u = u + '/'
-    return u
 
     def get_merge_request_changes(self) -> list:
         # 检查是否为 Merge Request Hook 事件
