@@ -41,9 +41,17 @@ def _mask_token(token: str) -> str:
 
 
 def render_webhook_management():
+    import time
+    
     # 玻璃态卡片样式
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown("#### ⚙️ 项目配置管理")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("#### ⚙️ 项目配置管理")
+    with col2:
+        if st.button("➕ 新建配置", use_container_width=True):
+            st.session_state['show_create_dialog'] = True
     
     # 列出当前映射
     mappings = WebhookService.get_all_webhook_mappings()
@@ -68,105 +76,109 @@ def render_webhook_management():
     else:
         st.markdown('<div class="info-box">ℹ️ 目前没有配置任何项目</div>', unsafe_allow_html=True)
 
-    st.markdown('<hr style="margin: 2rem 0; border: none; border-top: 2px solid rgba(102, 126, 234, 0.2);">', unsafe_allow_html=True)
-
-    # 创建新映射的表单
-    with st.form("create_webhook_form"):
-        st.markdown("### 📝 新建项目配置")
-        
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        st.markdown("#### 🏷️ 项目标识")
-        gitlab_base_url = st.text_input("GitLab Base URL", placeholder="https://gitlab.example.com")
-        project_slug = st.text_input("项目 Slug", placeholder="group/project")
-        project_name = st.text_input("项目名称 (可选)")
-        url_slug = st.text_input("URL Slug (可选)")
-        
-        st.markdown("#### 🔔 Webhook 配置")
-        dingtalk_url = st.text_input("DingTalk Webhook URL", placeholder="https://oapi.dingtalk.com/robot/send?access_token=...")
-        feishu_url = st.text_input("Feishu Webhook URL", placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...")
-        wecom_url = st.text_input("WeCom Webhook URL", placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...")
-        
-        st.markdown("#### 🔑 GitLab 访问令牌（可选）")
-        st.markdown('<div class="info-box">💡 提示：配置项目专属的 GitLab Token，用于访问私有仓库。留空则使用系统级配置。</div>', unsafe_allow_html=True)
-        gitlab_token = st.text_input("GitLab Token", type="password", placeholder="glpat-xxxxxxxxxxxxxxxxxxxx")
-        
-        st.markdown("#### 💬 自定义 Prompt 配置（可选）")
-        st.markdown('<div class="info-box">💡 提示：下方显示的是系统默认提示词，您可以修改后保存为项目专属提示词。留空则使用默认配置。</div>', unsafe_allow_html=True)
-        
-        # 加载默认提示词
-        default_prompts = _load_default_prompts()
-        
-        custom_prompt_system = st.text_area(
-            "System Prompt (系统提示词)",
-            value=default_prompts['system'],
-            height=150
-        )
-        custom_prompt_user = st.text_area(
-            "User Prompt (用户提示词)",
-            value=default_prompts['user'],
-            height=150
-        )
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        submitted = st.form_submit_button("💾 保存配置")
-        if submitted:
-            # 基本校验：必须提供 gitlab_base_url + project_slug，或者 project_name，或者 url_slug
-            if not gitlab_base_url and not project_slug and not project_name and not url_slug:
-                st.markdown('<div class="error-box">❌ 请至少填写以下之一：<br>• GitLab Base URL + 项目 Slug<br>• Project Name<br>• URL Slug</div>', unsafe_allow_html=True)
-            elif (gitlab_base_url and not project_slug) or (not gitlab_base_url and project_slug):
-                st.markdown('<div class="error-box">❌ GitLab Base URL 和项目 Slug 必须同时填写</div>', unsafe_allow_html=True)
-            else:
-                # 前端重复检测
-                existing = WebhookService.get_all_webhook_mappings()
-                dup_errors = []
-                if gitlab_base_url and project_slug:
-                    for m in existing:
-                        if m.get('gitlab_base_url') == gitlab_base_url and m.get('project_slug') == project_slug:
-                            dup_errors.append(f"已存在相同的 gitlab_base_url + project_slug: {gitlab_base_url} / {project_slug} (id={m.get('id')})")
-                            break
-                if project_name:
-                    for m in existing:
-                        if m.get('project_name') == project_name:
-                            dup_errors.append(f"已存在相同的 project_name: {project_name} (id={m.get('id')})")
-                            break
-                if url_slug:
-                    for m in existing:
-                        if m.get('url_slug') == url_slug:
-                            dup_errors.append(f"已存在相同的 url_slug: {url_slug} (id={m.get('id')})")
-                            break
-                if dup_errors:
-                    for e in dup_errors:
-                        st.markdown(f'<div class="error-box">❌ {e}</div>', unsafe_allow_html=True)
-                    st.markdown('<div class="info-box">如确实要更新该配置，请在 编辑 区选择对应 ID 并使用 更新 操作；或先删除旧的配置。</div>', unsafe_allow_html=True)
-                    st.stop()
-                # 校验 URL 格式
-                bad_urls = []
-                for name, val in (('DingTalk', dingtalk_url), ('Feishu', feishu_url), ('WeCom', wecom_url)):
-                    if val and not _is_valid_url(val):
-                        bad_urls.append(f"{name} URL 无效")
-                if bad_urls:
-                    for m in bad_urls:
-                        st.markdown(f'<div class="error-box">❌ {m}</div>', unsafe_allow_html=True)
-                else:
-                    mapping = WebhookService.create_or_update_webhook_mapping(
-                        gitlab_base_url=gitlab_base_url or None,
-                        project_slug=project_slug or None,
-                        project_name=project_name or None,
-                        url_slug=url_slug or None,
-                        dingtalk_url=dingtalk_url or None,
-                        feishu_url=feishu_url or None,
-                        wecom_url=wecom_url or None,
-                        custom_prompt_system=custom_prompt_system or None,
-                        custom_prompt_user=custom_prompt_user or None,
-                        gitlab_token=gitlab_token or None
-                    )
-                    if mapping:
-                        st.markdown('<div class="success-box">✅ 保存成功</div>', unsafe_allow_html=True)
-                        time.sleep(1)
-                        st.rerun()
+    # 新建配置弹出层
+    if st.session_state.get('show_create_dialog', False):
+        with st.dialog("📝 新建项目配置", width="large"):
+            with st.form("create_webhook_form"):
+                st.markdown("#### 🏷️ 项目标识")
+                gitlab_base_url = st.text_input("GitLab Base URL", placeholder="https://gitlab.example.com")
+                project_slug = st.text_input("项目 Slug", placeholder="group/project")
+                project_name = st.text_input("项目名称 (可选)")
+                url_slug = st.text_input("URL Slug (可选)")
+                
+                st.markdown("#### 🔔 Webhook 配置")
+                dingtalk_url = st.text_input("DingTalk Webhook URL", placeholder="https://oapi.dingtalk.com/robot/send?access_token=...")
+                feishu_url = st.text_input("Feishu Webhook URL", placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...")
+                wecom_url = st.text_input("WeCom Webhook URL", placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...")
+                
+                st.markdown("#### 🔑 GitLab 访问令牌（可选）")
+                st.markdown('<div class="info-box">💡 提示：配置项目专属的 GitLab Token，用于访问私有仓库。留空则使用系统级配置。</div>', unsafe_allow_html=True)
+                gitlab_token = st.text_input("GitLab Token", type="password", placeholder="glpat-xxxxxxxxxxxxxxxxxxxx")
+                
+                st.markdown("#### 💬 自定义 Prompt 配置（可选）")
+                st.markdown('<div class="info-box">💡 提示：下方显示的是系统默认提示词，您可以修改后保存为项目专属提示词。留空则使用默认配置。</div>', unsafe_allow_html=True)
+                
+                # 加载默认提示词
+                default_prompts = _load_default_prompts()
+                
+                custom_prompt_system = st.text_area(
+                    "System Prompt (系统提示词)",
+                    value=default_prompts['system'],
+                    height=150
+                )
+                custom_prompt_user = st.text_area(
+                    "User Prompt (用户提示词)",
+                    value=default_prompts['user'],
+                    height=150
+                )
+                
+                col_submit, col_cancel = st.columns(2)
+                with col_submit:
+                    submitted = st.form_submit_button("💾 保存配置", type="primary")
+                with col_cancel:
+                    cancelled = st.form_submit_button("❌ 取消")
+                
+                if cancelled:
+                    st.session_state['show_create_dialog'] = False
+                    st.rerun()
+                
+                if submitted:
+                    # 基本校验
+                    if not gitlab_base_url and not project_slug and not project_name and not url_slug:
+                        st.error("❌ 请至少填写以下之一：\n• GitLab Base URL + 项目 Slug\n• Project Name\n• URL Slug")
+                    elif (gitlab_base_url and not project_slug) or (not gitlab_base_url and project_slug):
+                        st.error("❌ GitLab Base URL 和项目 Slug 必须同时填写")
                     else:
-                        st.markdown('<div class="error-box">❌ 保存失败：可能存在冲突或数据库约束。请查看日志或使用 编辑 区进行更新/删除操作。</div>', unsafe_allow_html=True)
+                        # 前端重复检测
+                        existing = WebhookService.get_all_webhook_mappings()
+                        dup_errors = []
+                        if gitlab_base_url and project_slug:
+                            for m in existing:
+                                if m.get('gitlab_base_url') == gitlab_base_url and m.get('project_slug') == project_slug:
+                                    dup_errors.append(f"已存在相同的 gitlab_base_url + project_slug: {gitlab_base_url} / {project_slug} (id={m.get('id')})")
+                                    break
+                        if project_name:
+                            for m in existing:
+                                if m.get('project_name') == project_name:
+                                    dup_errors.append(f"已存在相同的 project_name: {project_name} (id={m.get('id')})")
+                                    break
+                        if url_slug:
+                            for m in existing:
+                                if m.get('url_slug') == url_slug:
+                                    dup_errors.append(f"已存在相同的 url_slug: {url_slug} (id={m.get('id')})")
+                                    break
+                        if dup_errors:
+                            for e in dup_errors:
+                                st.error(f"❌ {e}")
+                        else:
+                            # 校验 URL 格式
+                            bad_urls = []
+                            for name, val in (('DingTalk', dingtalk_url), ('Feishu', feishu_url), ('WeCom', wecom_url)):
+                                if val and not _is_valid_url(val):
+                                    bad_urls.append(f"{name} URL 无效")
+                            if bad_urls:
+                                for m in bad_urls:
+                                    st.error(f"❌ {m}")
+                            else:
+                                mapping = WebhookService.create_or_update_webhook_mapping(
+                                    gitlab_base_url=gitlab_base_url or None,
+                                    project_slug=project_slug or None,
+                                    project_name=project_name or None,
+                                    url_slug=url_slug or None,
+                                    dingtalk_url=dingtalk_url or None,
+                                    feishu_url=feishu_url or None,
+                                    wecom_url=wecom_url or None,
+                                    custom_prompt_system=custom_prompt_system or None,
+                                    custom_prompt_user=custom_prompt_user or None,
+                                    gitlab_token=gitlab_token or None
+                                )
+                                if mapping:
+                                    st.success("✅ 保存成功")
+                                    st.session_state['show_create_dialog'] = False
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("❌ 保存失败：可能存在冲突或数据库约束。请查看日志或使用 编辑 区进行更新/删除操作。")
 
     st.markdown('<hr style="margin: 2rem 0; border: none; border-top: 2px solid rgba(102, 126, 234, 0.2);">', unsafe_allow_html=True)
 
@@ -297,11 +309,17 @@ def render_webhook_management():
 
 def render_branch_webhook_management():
     """分支级配置管理界面"""
+    import time
+    
     # 玻璃态卡片样式
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown("#### 🌿 分支配置管理")
     
-    from biz.service.webhook_service import WebhookService
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("#### 🌿 分支配置管理")
+    with col2:
+        if st.button("➕ 新建配置", use_container_width=True):
+            st.session_state['show_branch_create_dialog'] = True
     
     # 列出当前分支配置
     branch_configs = WebhookService.get_all_branch_webhook_configs()
@@ -324,92 +342,97 @@ def render_branch_webhook_management():
     else:
         st.markdown('<div class="info-box">ℹ️ 目前没有配置任何分支规则</div>', unsafe_allow_html=True)
     
-    st.markdown('<hr style="margin: 2rem 0; border: none; border-top: 2px solid rgba(102, 126, 234, 0.2);">', unsafe_allow_html=True)
-    
-    # 创建新分支配置
-    with st.form("create_branch_webhook_form"):
-        st.markdown("### 📝 新建分支配置")
-        
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        st.markdown("#### 🌿 分支匹配规则")
-        st.markdown('<div class="info-box">💡 提示：branch_pattern 支持通配符，例如 <code>feature/*</code>、<code>main</code>、<code>release/*</code> 等</div>', unsafe_allow_html=True)
-        
-        gitlab_base_url = st.text_input("GitLab Base URL (必填)", placeholder="https://gitlab.example.com")
-        project_slug = st.text_input("项目 Slug (必填)", placeholder="group/project")
-        branch_pattern = st.text_input("分支模式 (必填)", placeholder="feature/* 或 main")
-        
-        st.markdown("#### 🔔 Webhook 配置")
-        dingtalk_url = st.text_input("DingTalk Webhook URL", placeholder="https://oapi.dingtalk.com/robot/send?access_token=...")
-        feishu_url = st.text_input("Feishu Webhook URL", placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...")
-        wecom_url = st.text_input("WeCom Webhook URL", placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...")
-        
-        st.markdown("#### 🔑 GitLab 访问令牌（可选）")
-        st.markdown('<div class="info-box">💡 提示：配置分支专属的 GitLab Token。留空则使用项目级或系统级配置。</div>', unsafe_allow_html=True)
-        gitlab_token = st.text_input("GitLab Token", type="password", placeholder="glpat-xxxxxxxxxxxxxxxxxxxx", key="branch_create_token")
-        
-        st.markdown("#### 💬 自定义 Prompt 配置（可选）")
-        st.markdown('<div class="info-box">💡 提示：下方显示的是系统默认提示词，您可以修改后保存为分支专属提示词。留空则使用项目级或系统级配置。</div>', unsafe_allow_html=True)
-        
-        default_prompts = _load_default_prompts()
-        
-        custom_prompt_system = st.text_area(
-            "System Prompt (系统提示词)",
-            value=default_prompts['system'],
-            height=150
-        )
-        custom_prompt_user = st.text_area(
-            "User Prompt (用户提示词)",
-            value=default_prompts['user'],
-            height=150
-        )
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        submitted = st.form_submit_button("💾 保存配置")
-        if submitted:
-            # 基本校验
-            if not gitlab_base_url or not project_slug or not branch_pattern:
-                st.markdown('<div class="error-box">❌ GitLab Base URL、项目 Slug 和分支模式都是必填项</div>', unsafe_allow_html=True)
-            else:
-                # 检查是否已存在相同配置
-                existing = WebhookService.get_all_branch_webhook_configs()
-                dup_found = False
-                for m in existing:
-                    if (m.get('gitlab_base_url') == gitlab_base_url and 
-                        m.get('project_slug') == project_slug and 
-                        m.get('branch_pattern') == branch_pattern):
-                        st.markdown(f'<div class="error-box">❌ 已存在相同的分支配置: {gitlab_base_url} / {project_slug} / {branch_pattern} (id={m.get("id")})</div>', unsafe_allow_html=True)
-                        dup_found = True
-                        break
+    # 新建分支配置弹出层
+    if st.session_state.get('show_branch_create_dialog', False):
+        with st.dialog("📝 新建分支配置", width="large"):
+            with st.form("create_branch_webhook_form"):
+                st.markdown("#### 🌿 分支匹配规则")
+                st.markdown('<div class="info-box">💡 提示：branch_pattern 支持通配符，例如 <code>feature/*</code>、<code>main</code>、<code>release/*</code> 等</div>', unsafe_allow_html=True)
                 
-                if not dup_found:
-                    # 校验 URL 格式
-                    bad_urls = []
-                    for name, val in (('DingTalk', dingtalk_url), ('Feishu', feishu_url), ('WeCom', wecom_url)):
-                        if val and not _is_valid_url(val):
-                            bad_urls.append(f"{name} URL 无效")
-                    
-                    if bad_urls:
-                        for m in bad_urls:
-                            st.markdown(f'<div class="error-box">❌ {m}</div>', unsafe_allow_html=True)
+                gitlab_base_url = st.text_input("GitLab Base URL (必填)", placeholder="https://gitlab.example.com")
+                project_slug = st.text_input("项目 Slug (必填)", placeholder="group/project")
+                branch_pattern = st.text_input("分支模式 (必填)", placeholder="feature/* 或 main")
+                
+                st.markdown("#### 🔔 Webhook 配置")
+                dingtalk_url = st.text_input("DingTalk Webhook URL", placeholder="https://oapi.dingtalk.com/robot/send?access_token=...")
+                feishu_url = st.text_input("Feishu Webhook URL", placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...")
+                wecom_url = st.text_input("WeCom Webhook URL", placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...")
+                
+                st.markdown("#### 🔑 GitLab 访问令牌（可选）")
+                st.markdown('<div class="info-box">💡 提示：配置分支专属的 GitLab Token。留空则使用项目级或系统级配置。</div>', unsafe_allow_html=True)
+                gitlab_token = st.text_input("GitLab Token", type="password", placeholder="glpat-xxxxxxxxxxxxxxxxxxxx", key="branch_create_token")
+                
+                st.markdown("#### 💬 自定义 Prompt 配置（可选）")
+                st.markdown('<div class="info-box">💡 提示：下方显示的是系统默认提示词，您可以修改后保存为分支专属提示词。留空则使用项目级或系统级配置。</div>', unsafe_allow_html=True)
+                
+                default_prompts = _load_default_prompts()
+                
+                custom_prompt_system = st.text_area(
+                    "System Prompt (系统提示词)",
+                    value=default_prompts['system'],
+                    height=150
+                )
+                custom_prompt_user = st.text_area(
+                    "User Prompt (用户提示词)",
+                    value=default_prompts['user'],
+                    height=150
+                )
+                
+                col_submit, col_cancel = st.columns(2)
+                with col_submit:
+                    submitted = st.form_submit_button("💾 保存配置", type="primary")
+                with col_cancel:
+                    cancelled = st.form_submit_button("❌ 取消")
+                
+                if cancelled:
+                    st.session_state['show_branch_create_dialog'] = False
+                    st.rerun()
+                
+                if submitted:
+                    # 基本校验
+                    if not gitlab_base_url or not project_slug or not branch_pattern:
+                        st.error("❌ GitLab Base URL、项目 Slug 和分支模式都是必填项")
                     else:
-                        mapping = WebhookService.create_branch_webhook_config(
-                            gitlab_base_url=gitlab_base_url,
-                            project_slug=project_slug,
-                            branch_pattern=branch_pattern,
-                            dingtalk_url=dingtalk_url or None,
-                            feishu_url=feishu_url or None,
-                            wecom_url=wecom_url or None,
-                            custom_prompt_system=custom_prompt_system or None,
-                            custom_prompt_user=custom_prompt_user or None,
-                            gitlab_token=gitlab_token or None
-                        )
-                        if mapping:
-                            st.markdown('<div class="success-box">✅ 保存成功</div>', unsafe_allow_html=True)
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.markdown('<div class="error-box">❌ 保存失败，请查看日志</div>', unsafe_allow_html=True)
+                        # 检查是否已存在相同配置
+                        existing = WebhookService.get_all_branch_webhook_configs()
+                        dup_found = False
+                        for m in existing:
+                            if (m.get('gitlab_base_url') == gitlab_base_url and 
+                                m.get('project_slug') == project_slug and 
+                                m.get('branch_pattern') == branch_pattern):
+                                st.error(f"❌ 已存在相同的分支配置: {gitlab_base_url} / {project_slug} / {branch_pattern} (id={m.get('id')})")
+                                dup_found = True
+                                break
+                        
+                        if not dup_found:
+                            # 校验 URL 格式
+                            bad_urls = []
+                            for name, val in (('DingTalk', dingtalk_url), ('Feishu', feishu_url), ('WeCom', wecom_url)):
+                                if val and not _is_valid_url(val):
+                                    bad_urls.append(f"{name} URL 无效")
+                            
+                            if bad_urls:
+                                for m in bad_urls:
+                                    st.error(f"❌ {m}")
+                            else:
+                                mapping = WebhookService.create_branch_webhook_config(
+                                    gitlab_base_url=gitlab_base_url,
+                                    project_slug=project_slug,
+                                    branch_pattern=branch_pattern,
+                                    dingtalk_url=dingtalk_url or None,
+                                    feishu_url=feishu_url or None,
+                                    wecom_url=wecom_url or None,
+                                    custom_prompt_system=custom_prompt_system or None,
+                                    custom_prompt_user=custom_prompt_user or None,
+                                    gitlab_token=gitlab_token or None
+                                )
+                                if mapping:
+                                    st.success("✅ 保存成功")
+                                    st.session_state['show_branch_create_dialog'] = False
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("❌ 保存失败，请查看日志")
     
     st.markdown('<hr style="margin: 2rem 0; border: none; border-top: 2px solid rgba(102, 126, 234, 0.2);">', unsafe_allow_html=True)
     
