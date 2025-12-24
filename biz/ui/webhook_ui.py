@@ -76,9 +76,9 @@ def render_webhook_management():
     else:
         st.markdown('<div class="info-box">ℹ️ 目前没有配置任何项目</div>', unsafe_allow_html=True)
 
-    # 新建配置弹出层
+    # 新建配置表单（使用expander模拟弹出效果）
     if st.session_state.get('show_create_dialog', False):
-        with st.dialog("📝 新建项目配置", width="large"):
+        with st.expander("📝 新建项目配置（点击展开）", expanded=True):
             with st.form("create_webhook_form"):
                 st.markdown("#### 🏷️ 项目标识")
                 gitlab_base_url = st.text_input("GitLab Base URL", placeholder="https://gitlab.example.com")
@@ -116,7 +116,7 @@ def render_webhook_management():
                 with col_submit:
                     submitted = st.form_submit_button("💾 保存配置", type="primary")
                 with col_cancel:
-                    cancelled = st.form_submit_button("❌ 取消")
+                    cancelled = st.form_submit_button("❌ 取消并关闭")
                 
                 if cancelled:
                     st.session_state['show_create_dialog'] = False
@@ -342,9 +342,9 @@ def render_branch_webhook_management():
     else:
         st.markdown('<div class="info-box">ℹ️ 目前没有配置任何分支规则</div>', unsafe_allow_html=True)
     
-    # 新建分支配置弹出层
+    # 新建分支配置表单（使用expander模拟弹出效果）
     if st.session_state.get('show_branch_create_dialog', False):
-        with st.dialog("📝 新建分支配置", width="large"):
+        with st.expander("📝 新建分支配置（点击展开）", expanded=True):
             with st.form("create_branch_webhook_form"):
                 st.markdown("#### 🌿 分支匹配规则")
                 st.markdown('<div class="info-box">💡 提示：branch_pattern 支持通配符，例如 <code>feature/*</code>、<code>main</code>、<code>release/*</code> 等</div>', unsafe_allow_html=True)
