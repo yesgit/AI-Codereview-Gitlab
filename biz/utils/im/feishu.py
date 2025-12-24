@@ -91,7 +91,8 @@ class FeishuNotifier:
             project_name: 项目名称（兼容旧方式）
             url_slug: URL slug（兼容旧方式）
         """
-        if not self.enabled:
+        # 如果未启用且没有手动传入 webhook_url，则直接返回
+        if not self.enabled and not self.default_webhook_url:
             logger.info("飞书推送未启用")
             return
 
@@ -104,29 +105,23 @@ class FeishuNotifier:
                 url_slug=url_slug
             )
             if msg_type == 'markdown':
+                # 构建结构化的飞书卡片，避免 Markdown 解析问题
                 data = {
                     "msg_type": "interactive",
                     "card": {
                         "schema": "2.0",
                         "config": {
-                            "update_multi": True,
-                        },
-                        "body": {
-                            "direction": "vertical",
-                            "padding": "12px 12px 12px 12px",
-                            "elements": [
-                                {
-                                    "tag": "markdown",
-                                    "content": content,
-                                }
-                            ]
+                            "wide_screen_mode": True,
                         },
                         "header": {
                             "title": {
                                 "tag": "plain_text",
-                                "content": title
+                                "content": title or "AI Code Review"
                             },
                             "template": "blue",
+                        },
+                        "body": {
+                            "elements": self._build_card_elements(content)
                         }
                     }
                 }
@@ -154,6 +149,141 @@ class FeishuNotifier:
 
         except Exception as e:
             logger.error(f"飞书消息发送失败! {e}")
+
+    def _build_card_elements(self, content):
+        """
+        将 Markdown 内容转换为飞书卡片元素列表
+        
+        Args:
+            content: Markdown 格式的消息内容
+        
+        Returns:
+            飞书卡片元素列表
+        """
+        elements = []
+        
+        # 按段落分割内容
+        paragraphs = self._split_content_paragraphs(content)
+        
+        for paragraph in paragraphs:
+            paragraph = paragraph.strip()
+            if not paragraph:
+                continue
+            
+            # 添加分割线（分隔不同部分）
+            if elements and self._should_add_separator(paragraph):
+                elements.append({"tag": "hr"})
+            
+            # 根据段落内容决定使用什么格式
+            element = self._create_element_from_paragraph(paragraph)
+            if element:
+                elements.append(element)
+        
+        return elements
+    
+    def _split_content_paragraphs(self, content):
+        """
+        将内容按段落分割
+        保留 AI Review 结果作为一个整体
+        """
+        paragraphs = []
+        current_lines = []
+        
+        for line in content.split('\n'):
+            stripped = line.strip()
+            
+            # AI Review 结果标记
+            if 'AI Review 结果' in stripped or 'Review 结果' in stripped:
+                # 保存之前的内容
+                if current_lines:
+                    paragraphs.append('\n'.join(current_lines))
+                    current_lines = []
+                # 添加当前标记行
+                current_lines.append(line)
+                continue
+            
+            # 代码块开始
+            if line.strip().startswith('```'):
+                current_lines.append(line)
+                continue
+            
+            current_lines.append(line)
+        
+        # 添加剩余内容
+        if current_lines:
+            paragraphs.append('\n'.join(current_lines))
+        
+        return paragraphs
+    
+    def _should_add_separator(self, paragraph):
+        """
+        判断是否需要在当前段落前添加分割线
+        """
+        # 主标题（### 开头）或副标题（#### 开头）前添加分割线
+        if paragraph.startswith('### ') or paragraph.startswith('#### '):
+            return True
+        # 包含特定标记的段落前添加分割线
+        if any(marker in paragraph for marker in ['AI Review 结果', 'Review 结果', '提交记录', '合并请求信息']):
+            return True
+        return False
+    
+    def _create_element_from_paragraph(self, paragraph):
+        """
+        根据段落内容创建飞书卡片元素
+        
+        对于包含 Markdown 语法的段落（表格、代码块、标题），使用 lark_md
+        对于普通文本段落，使用 plain_text
+        """
+        # 检查是否包含 Markdown 特殊语法
+        has_markdown = self._has_markdown_syntax(paragraph)
+        
+        if has_markdown:
+            return {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": paragraph
+                }
+            }
+        else:
+            return {
+                "tag": "div",
+                "text": {
+                    "tag": "plain_text",
+                    "content": paragraph
+                }
+            }
+    
+    def _has_markdown_syntax(self, text):
+        """
+        检查文本是否包含 Markdown 特殊语法
+        如果包含表格、代码块、链接等，返回 True
+        """
+        # 检查表格
+        if re.search(r'\|.*\|', text):
+            return True
+        
+        # 检查代码块
+        if re.search(r'```[\s\S]*?```', text):
+            return True
+        
+        # 检查 Markdown 链接 [text](url)
+        if re.search(r'\[.*?\]\(.*?\)', text):
+            return True
+        
+        # 检查加粗 **text**
+        if re.search(r'\*\*.*?\*\*', text):
+            return True
+        
+        # 检查标题 # ## ### 等
+        if re.match(r'^#+\s', text, re.MULTILINE):
+            return True
+        
+        # 检查列表项 - 或 *
+        if re.search(r'^[\-\*]\s', text, re.MULTILINE):
+            return True
+        
+        return False
 
     @staticmethod
     def _mask_url(u: str) -> str:
