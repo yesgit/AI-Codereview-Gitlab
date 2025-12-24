@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: app
-    image: docker.io/hedw/ai-codereview-gitlab:1.4.1
+    image: docker.io/hedw/ai-codereview-gitlab:1.4.2
     ports:
       - "5001:5001"      # Flask API
       - "5002:5002"      # Streamlit UI
@@ -25,7 +25,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    image: docker.io/hedw/ai-codereview-gitlab-worker:1.4.1
+    image: docker.io/hedw/ai-codereview-gitlab-worker:1.4.2
     env_file:
       - ./conf/.env
     depends_on:
