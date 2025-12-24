@@ -318,6 +318,34 @@ class PushHandler:
                 f"Failed to get changes for repository_compare: {response.status_code}, {response.text}")
             return []
 
+    def get_commit_diff(self, commit_id: str) -> list:
+        """获取单个 commit 的 diff"""
+        base = _normalize_base_url(self.gitlab_url)
+        if not base:
+            logger.error("gitlab_url not configured; cannot fetch commit diff")
+            return []
+        url = urljoin(base, f"api/v4/projects/{self.project_id}/repository/commits/{commit_id}/diff")
+        headers = {
+            'Private-Token': self.gitlab_token
+        }
+        response = requests.get(url, headers=headers, verify=False)
+        logger.debug(f"Get commit diff response: {response.status_code}, URL: {url}")
+        
+        if response.status_code == 200:
+            diffs = response.json()
+            # 转换格式以兼容 filter_changes
+            changes = []
+            for diff in diffs:
+                changes.append({
+                    'diff': diff.get('diff', ''),
+                    'new_path': diff.get('new_path', diff.get('old_path', '')),
+                    'deleted_file': diff.get('deleted_file', False)
+                })
+            return changes
+        else:
+            logger.warn(f"Failed to get commit diff for {commit_id}: {response.status_code}")
+            return []
+
     def get_push_changes(self) -> list:
         # 检查是否为 Push 事件
         if self.event_type != 'push':

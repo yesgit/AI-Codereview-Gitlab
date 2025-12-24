@@ -4,7 +4,7 @@ from datetime import datetime
 
 from biz.entity.review_entity import MergeRequestReviewEntity, PushReviewEntity
 from biz.event.event_manager import event_manager
-from biz.gitlab.webhook_handler import filter_changes, MergeRequestHandler, PushHandler
+from biz.gitlab.webhook_handler import filter_changes, MergeRequestHandler, PushHandler, _normalize_base_url
 from biz.github.webhook_handler import filter_changes as filter_github_changes, PullRequestHandler as GithubPullRequestHandler, PushHandler as GithubPushHandler
 from biz.gitea.webhook_handler import filter_changes as filter_gitea_changes, PullRequestHandler as GiteaPullRequestHandler, \
     PushHandler as GiteaPushHandler
@@ -25,44 +25,134 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
             logger.error('Failed to get commits')
             return
 
-        review_result = None
-        score = 0
-        additions = 0
-        deletions = 0
-        if push_review_enabled:
-            # 获取PUSH的changes
-            changes = handler.get_push_changes()
-            logger.info('changes: %s', changes)
-            changes = filter_changes(changes)
-            if not changes:
-                logger.info('未检测到PUSH代码的修改,修改文件可能不满足SUPPORTED_EXTENSIONS。')
-            review_result = "关注的文件没有修改"
+        # 按 author 分组 commits
+        from collections import defaultdict
+        author_commits = defaultdict(list)
+        for commit in commits:
+            author_name = commit.get('author', 'Unknown')
+            author_commits[author_name].append(commit)
 
-            if len(changes) > 0:
-                project_name = webhook_data['project']['name']
-                commits_text = ';'.join(commit.get('message', '').strip() for commit in commits)
-                code_reviewer = CodeReviewer()
-                review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
-                score = CodeReviewer.parse_review_score(review_text=review_result)
-                for item in changes:
-                    additions += item['additions']
-                    deletions += item['deletions']
-            # 将review结果提交到Gitlab的 notes
-            handler.add_push_notes(f'Auto Review Result: \n{review_result}')
+        logger.info(f"Total {len(commits)} commits, grouped by {len(author_commits)} authors")
 
-        event_manager['push_reviewed'].send(PushReviewEntity(
-            project_name=webhook_data['project']['name'],
-            author=webhook_data['user_username'],
-            branch=webhook_data.get('ref', '').replace('refs/heads/', ''),
-            updated_at=int(datetime.now().timestamp()),  # 当前时间
-            commits=commits,
-            score=score,
-            review_result=review_result,
-            url_slug=gitlab_url_slug,
-            webhook_data=webhook_data,
-            additions=additions,
-            deletions=deletions,
-        ))
+        # 如果没有启用 push review，仍然发送通知但不进行审查
+        if not push_review_enabled:
+            for author_name, author_commit_list in author_commits.items():
+                event_manager['push_reviewed'].send(PushReviewEntity(
+                    project_name=webhook_data['project']['name'],
+                    author=author_name,
+                    branch=webhook_data.get('ref', '').replace('refs/heads/', ''),
+                    updated_at=int(datetime.now().timestamp()),
+                    commits=author_commit_list,
+                    score=0,
+                    review_result="Push review 未启用",
+                    url_slug=gitlab_url_slug,
+                    webhook_data=webhook_data,
+                    additions=0,
+                    deletions=0,
+                ))
+            return
+
+        # 为每个 author 获取其所有 commits 的 diff，合并后审查
+        for author_name, author_commit_list in author_commits.items():
+            try:
+                all_changes = []
+                additions = 0
+                deletions = 0
+                commit_messages = []
+                failed_commits = []
+
+                # 获取该 author 所有 commits 的 diff
+                for commit in author_commit_list:
+                    # 需要从原始 webhook_data 中获取 commit ID
+                    commit_id = None
+                    for original_commit in webhook_data.get('commits', []):
+                        if original_commit.get('message') == commit.get('message'):
+                            commit_id = original_commit.get('id')
+                            break
+                    
+                    if commit_id:
+                        try:
+                            # 获取 commit diff，支持重试
+                            commit_changes = handler.get_commit_diff(commit_id)
+                            logger.debug(f"Author {author_name}, commit {commit_id[:8]}: got {len(commit_changes)} changes")
+                            commit_changes = filter_changes(commit_changes)
+                            all_changes.extend(commit_changes)
+                            commit_messages.append(commit.get('message', '').strip())
+                            
+                            # 统计
+                            for item in commit_changes:
+                                additions += item['additions']
+                                deletions += item['deletions']
+                        except Exception as e:
+                            logger.error(f"Failed to get diff for commit {commit_id[:8]} (author: {author_name}): {str(e)}")
+                            failed_commits.append(commit_id)
+                            continue
+                    else:
+                        logger.warning(f"Commit ID not found for message: {commit.get('message', '')}")
+                        failed_commits.append(commit_id)
+                        continue
+
+                # 记录失败的 commits
+                if failed_commits:
+                    logger.warning(f"Author {author_name}: Failed to process {len(failed_commits)} commits: {[c[:8] if c else 'N/A' for c in failed_commits]}")
+
+                # 如果有有效的 changes，进行审查
+                review_result = None
+                score = 0
+                
+                if all_changes:
+                    project_name = webhook_data['project']['name']
+                    commits_text = ';'.join(commit_messages)
+                    code_reviewer = CodeReviewer()
+                    review_result = code_reviewer.review_changes_in_batches(all_changes, commits_text, project_name)
+                    score = CodeReviewer.parse_review_score(review_text=review_result)
+                    
+                    # 发送该 author 的审查结果到 GitLab（在最后一次提交上添加评论）
+                    if author_commit_list:
+                        last_commit_id = None
+                        for original_commit in webhook_data.get('commits', [])[::-1]:
+                            if original_commit.get('author', {}).get('name') == author_name:
+                                last_commit_id = original_commit.get('id')
+                                break
+                        
+                        if last_commit_id:
+                            # 直接调用 API 添加评论
+                            from urllib.parse import urljoin
+                            base = _normalize_base_url(gitlab_url)
+                            if base:
+                                url = urljoin(base, f"api/v4/projects/{handler.project_id}/repository/commits/{last_commit_id}/comments")
+                                headers = {
+                                    'Private-Token': gitlab_token,
+                                    'Content-Type': 'application/json'
+                                }
+                                data = {
+                                    'note': f'[{author_name}] Auto Review Result: \n{review_result}'
+                                }
+                                import requests
+                                response = requests.post(url, headers=headers, json=data, verify=False)
+                                logger.debug(f"Add comment to commit {last_commit_id[:8]}: {response.status_code}")
+                else:
+                    review_result = "关注的文件没有修改"
+                    logger.info(f"Author {author_name}: {review_result}")
+
+                # 发送该 author 的 PushReviewEntity 事件
+                event_manager['push_reviewed'].send(PushReviewEntity(
+                    project_name=webhook_data['project']['name'],
+                    author=author_name,
+                    branch=webhook_data.get('ref', '').replace('refs/heads/', ''),
+                    updated_at=int(datetime.now().timestamp()),
+                    commits=author_commit_list,
+                    score=score,
+                    review_result=review_result,
+                    url_slug=gitlab_url_slug,
+                    webhook_data=webhook_data,
+                    additions=additions,
+                    deletions=deletions,
+                ))
+            except Exception as e:
+                logger.error(f"Error processing author {author_name}: {str(e)}")
+                # 继续处理下一个 author，不中断整个流程
+                continue
 
     except Exception as e:
         error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
