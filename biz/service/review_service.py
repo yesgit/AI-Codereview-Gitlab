@@ -32,7 +32,9 @@ class ReviewService:
                 Column('review_result', Text),
                 Column('additions', Integer, default=0),
                 Column('deletions', Integer, default=0),
-                Column('last_commit_id', Text, default='')
+                Column('last_commit_id', Text, default=''),
+                Column('gitlab_base_url', Text),
+                Column('project_slug', Text)
             )
             Table(
                 'push_review_log', metadata,
@@ -45,7 +47,9 @@ class ReviewService:
                 Column('score', Integer),
                 Column('review_result', Text),
                 Column('additions', Integer, default=0),
-                Column('deletions', Integer, default=0)
+                Column('deletions', Integer, default=0),
+                Column('gitlab_base_url', Text),
+                Column('project_slug', Text)
             )
             Table(
                 'project_webhooks', metadata,
@@ -67,8 +71,8 @@ class ReviewService:
         try:
             engine = get_engine()
             sql = text('''
-                INSERT INTO mr_review_log (project_name, author, source_branch, target_branch, updated_at, commit_messages, score, url, review_result, additions, deletions, last_commit_id)
-                VALUES (:project_name, :author, :source_branch, :target_branch, :updated_at, :commit_messages, :score, :url, :review_result, :additions, :deletions, :last_commit_id)
+                INSERT INTO mr_review_log (project_name, author, source_branch, target_branch, updated_at, commit_messages, score, url, review_result, additions, deletions, last_commit_id, gitlab_base_url, project_slug)
+                VALUES (:project_name, :author, :source_branch, :target_branch, :updated_at, :commit_messages, :score, :url, :review_result, :additions, :deletions, :last_commit_id, :gitlab_base_url, :project_slug)
             ''')
             with engine.begin() as conn:
                 conn.execute(sql, {
@@ -83,7 +87,9 @@ class ReviewService:
                     'review_result': entity.review_result,
                     'additions': entity.additions,
                     'deletions': entity.deletions,
-                    'last_commit_id': entity.last_commit_id
+                    'last_commit_id': entity.last_commit_id,
+                    'gitlab_base_url': entity.gitlab_base_url,
+                    'project_slug': entity.project_slug
                 })
         except Exception as e:
             logger.error(f"Error inserting review log: {e}")
@@ -93,7 +99,7 @@ class ReviewService:
                            updated_at_lte: int = None) -> pd.DataFrame:
         try:
             engine = get_engine()
-            query = "SELECT project_name, author, source_branch, target_branch, updated_at, commit_messages, score, url, review_result, additions, deletions FROM mr_review_log WHERE 1=1"
+            query = "SELECT project_name, author, source_branch, target_branch, updated_at, commit_messages, score, url, review_result, additions, deletions, gitlab_base_url, project_slug FROM mr_review_log WHERE 1=1"
             params = {}
             if authors:
                 placeholders = ','.join([f':a{i}' for i in range(len(authors))])
@@ -141,8 +147,8 @@ class ReviewService:
     def insert_push_review_log(entity: PushReviewEntity):
         try:
             engine = get_engine()
-            sql = text('''INSERT INTO push_review_log (project_name, author, branch, updated_at, commit_messages, score, review_result, additions, deletions)
-                         VALUES (:project_name, :author, :branch, :updated_at, :commit_messages, :score, :review_result, :additions, :deletions)''')
+            sql = text('''INSERT INTO push_review_log (project_name, author, branch, updated_at, commit_messages, score, review_result, additions, deletions, gitlab_base_url, project_slug)
+                         VALUES (:project_name, :author, :branch, :updated_at, :commit_messages, :score, :review_result, :additions, :deletions, :gitlab_base_url, :project_slug)''')
             with engine.begin() as conn:
                 conn.execute(sql, {
                     'project_name': entity.project_name,
@@ -153,7 +159,9 @@ class ReviewService:
                     'score': entity.score,
                     'review_result': entity.review_result,
                     'additions': entity.additions,
-                    'deletions': entity.deletions
+                    'deletions': entity.deletions,
+                    'gitlab_base_url': entity.gitlab_base_url,
+                    'project_slug': entity.project_slug
                 })
         except Exception as e:
             logger.error(f"Error inserting review log: {e}")
@@ -163,7 +171,7 @@ class ReviewService:
                              updated_at_lte: int = None) -> pd.DataFrame:
         try:
             engine = get_engine()
-            query = "SELECT project_name, author, branch, updated_at, commit_messages, score, review_result, additions, deletions FROM push_review_log WHERE 1=1"
+            query = "SELECT project_name, author, branch, updated_at, commit_messages, score, review_result, additions, deletions, gitlab_base_url, project_slug FROM push_review_log WHERE 1=1"
             params = {}
             if authors:
                 placeholders = ','.join([f':a{i}' for i in range(len(authors))])

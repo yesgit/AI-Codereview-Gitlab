@@ -91,6 +91,10 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
             logger.error('Failed to get commits')
             return
 
+        # 提取 gitlab_base_url 和 project_slug
+        gitlab_base_url = _normalize_base_url(gitlab_url)
+        project_slug = webhook_data.get('project', {}).get('path_with_namespace')
+
         # 按 author 分组 commits
         from collections import defaultdict
         author_commits = defaultdict(list)
@@ -115,6 +119,8 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
                     webhook_data=webhook_data,
                     additions=0,
                     deletions=0,
+                    gitlab_base_url=gitlab_base_url,
+                    project_slug=project_slug,
                 ))
             return
 
@@ -214,6 +220,8 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
                     webhook_data=webhook_data,
                     additions=additions,
                     deletions=deletions,
+                    gitlab_base_url=gitlab_base_url,
+                    project_slug=project_slug,
                 ))
             except Exception as e:
                 logger.error(f"Error processing author {author_name}: {str(e)}")
@@ -244,6 +252,10 @@ def handle_merge_request_event(webhook_data: dict, gitlab_token: str, gitlab_url
         # 解析Webhook数据
         handler = MergeRequestHandler(webhook_data, gitlab_token, gitlab_url)
         logger.info('Merge Request Hook event received')
+
+        # 提取 gitlab_base_url 和 project_slug
+        gitlab_base_url = _normalize_base_url(gitlab_url)
+        project_slug = webhook_data.get('project', {}).get('path_with_namespace')
 
         # 新增：判断是否为draft（草稿）MR
         object_attributes = webhook_data.get('object_attributes', {})
@@ -321,6 +333,8 @@ def handle_merge_request_event(webhook_data: dict, gitlab_token: str, gitlab_url
                 additions=additions,
                 deletions=deletions,
                 last_commit_id=last_commit_id,
+                gitlab_base_url=gitlab_base_url,
+                project_slug=project_slug,
             )
         )
 
@@ -342,6 +356,11 @@ def handle_github_push_event(webhook_data: dict, github_token: str, github_url: 
         if not commits:
             logger.error('Failed to get commits')
             return
+
+        # 提取 github_base_url 和 project_slug
+        from biz.utils.token_util import _normalize_base_url as normalize_url
+        github_base_url = normalize_url(github_url)
+        project_slug = webhook_data.get('repository', {}).get('full_name')
 
         review_result = None
         score = 0
@@ -380,6 +399,8 @@ def handle_github_push_event(webhook_data: dict, github_token: str, github_url: 
             webhook_data=webhook_data,
             additions=additions,
             deletions=deletions,
+            gitlab_base_url=github_base_url,
+            project_slug=project_slug,
         ))
 
     except Exception as e:
@@ -406,6 +427,11 @@ def handle_github_pull_request_event(webhook_data: dict, github_token: str, gith
         # 解析Webhook数据
         handler = GithubPullRequestHandler(webhook_data, github_token, github_url)
         logger.info('GitHub Pull Request event received')
+
+        # 提取 github_base_url 和 project_slug
+        from biz.utils.token_util import _normalize_base_url as normalize_url
+        github_base_url = normalize_url(github_url)
+        project_slug = webhook_data.get('repository', {}).get('full_name')
         # 如果开启了仅review projected branches的，判断当前目标分支是否为projected branches
         if merge_review_only_protected_branches and not handler.target_branch_protected():
             logger.info("Merge Request target branch not match protected branches, ignored.")
@@ -473,6 +499,8 @@ def handle_github_pull_request_event(webhook_data: dict, github_token: str, gith
                 additions=additions,
                 deletions=deletions,
                 last_commit_id=github_last_commit_id,
+                gitlab_base_url=github_base_url,
+                project_slug=project_slug,
             ))
 
     except Exception as e:
@@ -494,6 +522,11 @@ def handle_gitea_push_event(webhook_data: dict, gitea_token: str, gitea_url: str
         if not commits:
             logger.error('Failed to get commits')
             return
+
+        # 提取 gitea_base_url 和 project_slug
+        from biz.gitea.webhook_handler import _normalize_base_url as normalize_gitea_url
+        gitea_base_url = normalize_gitea_url(gitea_url)
+        project_slug = webhook_data.get('repository', {}).get('full_name')
 
         review_result = None
         score = 0
@@ -533,6 +566,8 @@ def handle_gitea_push_event(webhook_data: dict, gitea_token: str, gitea_url: str
             webhook_data=webhook_data,
             additions=additions,
             deletions=deletions,
+            gitlab_base_url=gitea_base_url,
+            project_slug=project_slug,
         ))
 
     except Exception as e:
@@ -550,6 +585,11 @@ def handle_gitea_pull_request_event(webhook_data: dict, gitea_token: str, gitea_
     try:
         handler = GiteaPullRequestHandler(webhook_data, gitea_token, gitea_url)
         logger.info('Gitea Pull Request event received')
+
+        # 提取 gitea_base_url 和 project_slug
+        from biz.gitea.webhook_handler import _normalize_base_url as normalize_gitea_url
+        gitea_base_url = normalize_gitea_url(gitea_url)
+        project_slug = webhook_data.get('repository', {}).get('full_name')
 
         pull_request = webhook_data.get('pull_request', {})
 
@@ -618,6 +658,8 @@ def handle_gitea_pull_request_event(webhook_data: dict, gitea_token: str, gitea_
                 additions=additions,
                 deletions=deletions,
                 last_commit_id=last_commit_id,
+                gitlab_base_url=gitea_base_url,
+                project_slug=project_slug,
             ))
 
     except Exception as e:

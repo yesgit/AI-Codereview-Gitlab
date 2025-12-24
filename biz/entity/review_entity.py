@@ -1,7 +1,7 @@
 class MergeRequestReviewEntity:
     def __init__(self, project_name: str, author: str, source_branch: str, target_branch: str, updated_at: int,
                  commits: list, score: float, url: str, review_result: str, url_slug: str, webhook_data: dict,
-                 additions: int, deletions: int, last_commit_id: str):
+                 additions: int, deletions: int, last_commit_id: str, gitlab_base_url: str = None, project_slug: str = None):
         self.project_name = project_name
         self.author = author
         self.source_branch = source_branch
@@ -16,6 +16,8 @@ class MergeRequestReviewEntity:
         self.additions = additions
         self.deletions = deletions
         self.last_commit_id = last_commit_id
+        self.gitlab_base_url = gitlab_base_url
+        self.project_slug = project_slug
 
     @property
     def commit_messages(self):
@@ -25,7 +27,8 @@ class MergeRequestReviewEntity:
 
 class PushReviewEntity:
     def __init__(self, project_name: str, author: str, branch: str, updated_at: int, commits: list, score: float,
-                 review_result: str, url_slug: str, webhook_data: dict, additions: int, deletions: int):
+                 review_result: str, url_slug: str, webhook_data: dict, additions: int, deletions: int,
+                 gitlab_base_url: str = None, project_slug: str = None):
         self.project_name = project_name
         self.author = author
         self.branch = branch
@@ -37,9 +40,10 @@ class PushReviewEntity:
         self.webhook_data = webhook_data
         self.additions = additions
         self.deletions = deletions
+        self.gitlab_base_url = gitlab_base_url
+        self.project_slug = project_slug
 
     @property
     def commit_messages(self):
         # 合并所有 commit 的 message 属性，用分号分隔
         return "; ".join(commit["message"].strip() for commit in self.commits)
-
