@@ -25,4 +25,7 @@ export const reviewsApi = {
     updated_at_lte?: number;
   }) => 
     request.get<StatsResponse>('/reviews/stats', { params }),
+
+  sendDailyReport: () => 
+    request.get<{ message: string }>('/review/daily_report'),
 };

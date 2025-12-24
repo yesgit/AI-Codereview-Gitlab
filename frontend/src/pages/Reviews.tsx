@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Table, Tabs, Select, DatePicker, Space, Tag } from 'antd';
+import { Table, Tabs, Select, DatePicker, Space, Tag, Button, message } from 'antd';
+import { SendOutlined } from '@ant-design/icons';
 import { reviewsApi } from '@/api/reviews';
 import type { ReviewLog } from '@/types';
 import type { Dayjs } from 'dayjs';
@@ -18,6 +19,7 @@ const Reviews: React.FC = () => {
   const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]);
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [sendingReport, setSendingReport] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -53,6 +55,19 @@ const Reviews: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [activeTab, selectedAuthors, selectedProjects, dateRange]);
+
+  const handleSendDailyReport = async () => {
+    setSendingReport(true);
+    try {
+      await reviewsApi.sendDailyReport();
+      message.success('日报发送成功！');
+    } catch (error) {
+      console.error('Failed to send daily report:', error);
+      message.error('日报发送失败，请查看日志。');
+    } finally {
+      setSendingReport(false);
+    }
+  };
 
   const mrColumns = [
     { title: '项目', dataIndex: 'project_name', key: 'project_name', width: 150 },
@@ -105,9 +120,19 @@ const Reviews: React.FC = () => {
           />
           <RangePicker onChange={(dates) => setDateRange(dates as any)} />
         </Space>
-        <div>
-          共 {total} 条记录，平均评分: <strong>{averageScore.toFixed(1)}</strong>
-        </div>
+        <Space>
+          <Button 
+            type="primary"
+            icon={<SendOutlined />}
+            onClick={handleSendDailyReport}
+            loading={sendingReport}
+          >
+            手动发送日报
+          </Button>
+          <div>
+            共 {total} 条记录，平均评分: <strong>{averageScore.toFixed(1)}</strong>
+          </div>
+        </Space>
       </div>
       
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
