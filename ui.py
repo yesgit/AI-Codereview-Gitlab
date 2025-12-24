@@ -3,9 +3,17 @@ import math
 from pathlib import Path
 
 import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
+from streamlit_option_menu import option_menu
+import streamlit_extras.stylable_container as stylable_container
 
 # 设置Streamlit主题 - 必须是第一个st命令
-st.set_page_config(layout="wide", page_title="AI代码审查平台", page_icon="🤖", initial_sidebar_state="expanded")
+st.set_page_config(
+    layout="wide", 
+    page_title="AI代码审查平台", 
+    page_icon="🤖", 
+    initial_sidebar_state="expanded"
+)
 
 import datetime
 import os
@@ -18,7 +26,8 @@ from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.font_manager as fm
-import streamlit as st
+import plotly.graph_objects as go
+import plotly.express as px
 
 from biz.service.review_service import ReviewService
 from biz.ui.webhook_ui import render_webhook_management, render_branch_webhook_management
@@ -191,84 +200,164 @@ def get_data(service_func, authors=None, project_names=None, updated_at_gte=None
     return data
 
 
-# 隐藏默认的Streamlit菜单和页眉
+# 现代化Glassmorphism CSS样式
 st.markdown("""
-    <style>
-        #MainMenu {visibility: hidden;}
-        header {visibility: hidden;}
-        footer {visibility: hidden;}
-        div.block-container {padding-top: 0rem;}
-    </style>
-    """, unsafe_allow_html=True)
-
-# 自定义CSS样式
-st.markdown(
-    """
-    <style>
-    /* 调整侧边栏宽度 */
-    [data-testid="stSidebar"] {
-        min-width: 180px;
-        max-width: 180px;
-    }
+<style>
+    /* 隐藏默认Streamlit菜单和页眉 */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* 主容器样式 */
     .main {
-        background-color: #f0f2f6;
-        padding-top: 0rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding-top: 1rem;
     }
-    .stButton>button {
-        background-color: #4CAF50;
-        color: white;
+    
+    /* 侧边栏样式 */
+    [data-testid="stSidebar"] {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+    
+    /* 玻璃态卡片样式 */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
         border-radius: 20px;
-        padding: 0.5rem 2rem;
-        border: none;
-        transition: all 0.3s ease;
+        padding: 2rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
     }
-    .stButton>button:hover {
-        background-color: #45a049;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        color: #ffffff;  /* 设置悬停时的文字颜色为白色 */
+    
+    /* 登录容器样式 */
+    .login-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 30px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        padding: 3rem 2rem;
+        margin-top: 2rem;
+        border: 1px solid rgba(255, 255, 255, 0.3);
     }
-
-    .stTextInput>div>div>input {
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        padding: 0.5rem;
-    }
-    .stCheckbox>div>div>input {
-        accent-color: #4CAF50;
-    }
-    .stDataFrame {
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .stMarkdown {font-size: 18px;}
+    
+    /* 登录标题样式 */
     .login-title {
         text-align: center;
         color: #2E4053;
-        margin: 0.5rem 0;
-        font-size: 2.2rem;
-        font-weight: bold;
+        margin: 1.5rem 0;
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
-    .login-container {
-        background-color: white;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        margin-top: 0rem;
-    }
+    
+    /* 平台图标样式 */
     .platform-icon {
-        font-size: 3.5rem;
-        margin-bottom: 0.5rem;
+        font-size: 5rem;
         text-align: center;
+        margin-bottom: 1rem;
+        text-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
     }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+    
+    /* 按钮样式 */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 25px;
+        padding: 0.75rem 3rem;
+        border: none;
+        font-weight: 600;
+        font-size: 1.1rem;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+    
+    /* 输入框样式 */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea {
+        border: 2px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 0.75rem 1rem;
+        background: rgba(255, 255, 255, 0.8);
+        transition: all 0.3s ease;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    /* 复选框样式 */
+    .stCheckbox > div > div > input {
+        accent-color: #667eea;
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+    
+    /* 数据表格样式 */
+    .ag-theme-alpine {
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+    
+    /* 图表容器样式 */
+    .chart-container {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        height: 100%;
+    }
+    
+    /* 侧边栏菜单样式 */
+    .nav-menu {
+        background: transparent;
+        border: none;
+        font-size: 1.1rem;
+    }
+    
+    /* 信息提示样式 */
+    .info-box {
+        background: rgba(102, 126, 234, 0.1);
+        border-left: 4px solid #667eea;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .success-box {
+        background: rgba(76, 175, 80, 0.1);
+        border-left: 4px solid #4CAF50;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .error-box {
+        background: rgba(244, 67, 54, 0.1);
+        border-left: 4px solid #F44336;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 
 # 登录界面
 def login_page():
-    # 使用 st.columns 创建居中布局
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown('<div class="login-container">', unsafe_allow_html=True)
@@ -277,13 +366,7 @@ def login_page():
 
         # 如果用户名和密码都为 'admin'，提示用户修改密码
         if DASHBOARD_USER == "admin" and DASHBOARD_PASSWORD == "admin":
-            st.warning(
-                "安全提示：检测到默认用户名和密码为 'admin'，存在安全风险！\n\n"
-                "请立即修改：\n"
-                "1. 打开 `.env` 文件\n"
-                "2. 修改 `DASHBOARD_USER` 和 `DASHBOARD_PASSWORD` 变量\n"
-                "3. 保存并重启应用"
-            )
+            st.markdown('<div class="error-box">⚠️ <b>安全提示：</b>检测到默认用户名和密码为 \'admin\'，存在安全风险！<br><br>请立即修改：<br>1. 打开 <code>.env</code> 文件<br>2. 修改 <code>DASHBOARD_USER</code> 和 <code>DASHBOARD_PASSWORD</code> 变量<br>3. 保存并重启应用</div>', unsafe_allow_html=True)
             st.write(f"当前用户名: `{DASHBOARD_USER}`, 当前密码: `{DASHBOARD_PASSWORD}`")
 
         # 获取保存的用户名和密码
@@ -300,142 +383,260 @@ def login_page():
                 if authenticate(username, password, remember_password):
                     st.rerun()  # 重新运行应用以显示主要内容
                 else:
-                    st.error("用户名或密码错误")
+                    st.markdown('<div class="error-box">❌ 用户名或密码错误</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
 
-# 生成项目提交数量图表
-def generate_project_count_chart(df):
+# 生成Plotly图表 - 项目提交数量
+def generate_project_count_chart_plotly(df):
     if df.empty:
         st.info("没有数据可供展示")
         return
 
-    # 计算每个项目的提交数量
     project_counts = df['project_name'].value_counts().reset_index()
     project_counts.columns = ['project_name', 'count']
 
-    # 生成颜色列表，每个项目一个颜色
-    colors = plt.colormaps['tab20'].resampled(len(project_counts))
-
-    # 显示提交数量柱状图
-    fig1, ax1 = plt.subplots(figsize=(10, 6))
-    ax1.bar(
-        project_counts['project_name'],
-        project_counts['count'],
-        color=[colors(i) for i in range(len(project_counts))]
+    fig = px.bar(
+        project_counts,
+        x='project_name',
+        y='count',
+        title='项目提交统计',
+        labels={'project_name': '项目', 'count': '提交数量'},
+        color='count',
+        color_continuous_scale='Viridis'
     )
-    ax1.yaxis.set_major_locator(MaxNLocator(integer=True))
-    plt.xticks(rotation=45, ha='right', fontsize=26)
-    plt.tight_layout()
-    st.pyplot(fig1)
+    
+    fig.update_layout(
+        showlegend=False,
+        xaxis_tickangle=-45,
+        margin=dict(l=0, r=0, t=30, b=80),
+        plot_bgcolor='rgba(255,255,255,0)',
+        paper_bgcolor='rgba(255,255,255,0)',
+    )
+    
+    fig.update_traces(
+        marker_line_width=2,
+        marker_line_color='rgba(0,0,0,0.1)',
+        hovertemplate='<b>%{x}</b><br>提交数: %{y}<extra></extra>'
+    )
+    
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 
-# 生成项目平均分数图表
-def generate_project_score_chart(df):
+# 生成Plotly图表 - 项目平均分数
+def generate_project_score_chart_plotly(df):
     if df.empty:
         st.info("没有数据可供展示")
         return
 
-    # 计算每个项目的平均分数
     project_scores = df.groupby('project_name')['score'].mean().reset_index()
     project_scores.columns = ['project_name', 'average_score']
 
-    # 生成颜色列表，每个项目一个颜色
-    # colors = plt.cm.get_cmap('Accent', len(project_scores))  # 使用'tab20'颜色映射，适合分类数据
-    colors = plt.colormaps['Accent'].resampled(len(project_scores))
-    # 显示平均分数柱状图
-    fig2, ax2 = plt.subplots(figsize=(10, 6))
-    ax2.bar(
-        project_scores['project_name'],
-        project_scores['average_score'],
-        color=[colors(i) for i in range(len(project_scores))]
+    fig = px.bar(
+        project_scores,
+        x='project_name',
+        y='average_score',
+        title='项目平均得分',
+        labels={'project_name': '项目', 'average_score': '平均得分'},
+        color='average_score',
+        color_continuous_scale='RdYlGn',
+        range_color=[0, 100]
     )
-    ax2.yaxis.set_major_locator(MaxNLocator(integer=True))
-    plt.xticks(rotation=45, ha='right', fontsize=26)
-    plt.tight_layout()
-    st.pyplot(fig2)
+    
+    fig.update_layout(
+        showlegend=False,
+        xaxis_tickangle=-45,
+        margin=dict(l=0, r=0, t=30, b=80),
+        plot_bgcolor='rgba(255,255,255,0)',
+        paper_bgcolor='rgba(255,255,255,0)',
+        yaxis_range=[0, 100]
+    )
+    
+    fig.update_traces(
+        hovertemplate='<b>%{x}</b><br>平均分: %{y:.2f}<extra></extra>'
+    )
+    
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 
-# 生成人员提交数量图表
-def generate_author_count_chart(df):
+# 生成Plotly图表 - 人员提交数量
+def generate_author_count_chart_plotly(df):
     if df.empty:
         st.info("没有数据可供展示")
         return
 
-    # 计算每个人员的提交数量
     author_counts = df['author'].value_counts().reset_index()
     author_counts.columns = ['author', 'count']
 
-    # 生成颜色列表，每个项目一个颜色
-    colors = plt.colormaps['Paired'].resampled(len(author_counts))
-    # 显示提交数量柱状图
-    fig1, ax1 = plt.subplots(figsize=(10, 6))
-    ax1.bar(
-        author_counts['author'],
-        author_counts['count'],
-        color=[colors(i) for i in range(len(author_counts))]
+    fig = px.bar(
+        author_counts,
+        x='author',
+        y='count',
+        title='开发者提交统计',
+        labels={'author': '开发者', 'count': '提交数量'},
+        color='count',
+        color_continuous_scale='Plasma'
     )
-    ax1.yaxis.set_major_locator(MaxNLocator(integer=True))
-    plt.xticks(rotation=45, ha='right', fontsize=26)
-    plt.tight_layout()
-    st.pyplot(fig1)
-    plt.close(fig1)
+    
+    fig.update_layout(
+        showlegend=False,
+        xaxis_tickangle=-45,
+        margin=dict(l=0, r=0, t=30, b=80),
+        plot_bgcolor='rgba(255,255,255,0)',
+        paper_bgcolor='rgba(255,255,255,0)',
+    )
+    
+    fig.update_traces(
+        hovertemplate='<b>%{x}</b><br>提交数: %{y}<extra></extra>'
+    )
+    
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 
-# 生成人员平均分数图表
-def generate_author_score_chart(df):
+# 生成Plotly图表 - 人员平均分数
+def generate_author_score_chart_plotly(df):
     if df.empty:
         st.info("没有数据可供展示")
         return
 
-    # 计算每个人员的平均分数
     author_scores = df.groupby('author')['score'].mean().reset_index()
     author_scores.columns = ['author', 'average_score']
 
-    # 显示平均分数柱状图
-    fig2, ax2 = plt.subplots(figsize=(10, 6))
-    # 生成颜色列表，每个项目一个颜色
-    colors = plt.colormaps['Pastel1'].resampled(len(author_scores))
-    ax2.bar(
-        author_scores['author'],
-        author_scores['average_score'],
-        color=[colors(i) for i in range(len(author_scores))]
+    fig = px.bar(
+        author_scores,
+        x='author',
+        y='average_score',
+        title='开发者平均得分',
+        labels={'author': '开发者', 'average_score': '平均得分'},
+        color='average_score',
+        color_continuous_scale='RdYlGn',
+        range_color=[0, 100]
     )
-    ax2.yaxis.set_major_locator(MaxNLocator(integer=True))
-    plt.xticks(rotation=45, ha='right', fontsize=26)
-    plt.tight_layout()
-    st.pyplot(fig2)
+    
+    fig.update_layout(
+        showlegend=False,
+        xaxis_tickangle=-45,
+        margin=dict(l=0, r=0, t=30, b=80),
+        plot_bgcolor='rgba(255,255,255,0)',
+        paper_bgcolor='rgba(255,255,255,0)',
+        yaxis_range=[0, 100]
+    )
+    
+    fig.update_traces(
+        hovertemplate='<b>%{x}</b><br>平均分: %{y:.2f}<extra></extra>'
+    )
+    
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
 
-def generate_author_code_line_chart(df):
+# 生成Plotly图表 - 人员代码行数
+def generate_author_code_line_chart_plotly(df):
     if df.empty:
         st.info("没有数据可供展示")
         return
-        # 检查必要的列是否存在
 
     if 'additions' not in df.columns or 'deletions' not in df.columns:
         st.warning("无法生成代码行数图表：缺少必要的数据列")
         return
-        # 计算每个人员的代码行数
-    author_code_lines_add = df.groupby('author')['additions'].sum().reset_index()
-    author_code_lines_add.columns = ['author', 'additions']
-    author_code_lines_del = df.groupby('author')['deletions'].sum().reset_index()
-    author_code_lines_del.columns = ['author', 'deletions']
-    # 显示代码行数柱状图
-    fig3, ax3 = plt.subplots(figsize=(10, 6))
-    ax3.bar(
-        author_code_lines_add['author'],
-        author_code_lines_add['additions'],
-        color=(0.7, 1, 0.7)
+
+    author_code_add = df.groupby('author')['additions'].sum().reset_index()
+    author_code_add.columns = ['author', 'additions']
+    author_code_del = df.groupby('author')['deletions'].sum().reset_index()
+    author_code_del.columns = ['author', 'deletions']
+
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        name='新增',
+        x=author_code_add['author'],
+        y=author_code_add['additions'],
+        marker_color='rgba(76, 175, 80, 0.8)'
+    ))
+    
+    fig.add_trace(go.Bar(
+        name='删除',
+        x=author_code_del['author'],
+        y=-author_code_del['deletions'],
+        marker_color='rgba(244, 67, 54, 0.8)'
+    ))
+    
+    fig.update_layout(
+        title='人员代码变更行数',
+        xaxis_tickangle=-45,
+        barmode='relative',
+        showlegend=True,
+        margin=dict(l=0, r=0, t=30, b=80),
+        plot_bgcolor='rgba(255,255,255,0)',
+        paper_bgcolor='rgba(255,255,255,0)',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    ax3.bar(
-        author_code_lines_del['author'],
-        -author_code_lines_del['deletions'],
-        color=(1, 0.7, 0.7)
+    
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+
+# AgGrid分页表格显示
+def display_aggrid(df, column_config, key):
+    if df.empty:
+        st.info("没有数据可供展示")
+        return
+    
+    # 配置AgGrid选项
+    gb = GridOptionsBuilder.from_dataframe(df)
+    
+    # 设置基本配置
+    gb.configure_default_column(groupable=False, value=True, enableRowGroup=True, aggFunc='sum', pinned=True)
+    
+    # 配置列
+    for col_name in df.columns:
+        if col_name in column_config:
+            config = column_config[col_name]
+            if config is None:
+                gb.configure_column(col_name, hide=True)
+            elif isinstance(config, dict) and 'cellRenderer' in config:
+                gb.configure_column(col_name, cellRenderer=config['cellRenderer'])
+            elif isinstance(config, dict) and 'valueFormatter' in config:
+                gb.configure_column(col_name, valueFormatter=config['valueFormatter'])
+    
+    # 配置分页
+    gb.configure_pagination(
+        paginationAutoPageSize=False,
+        paginationPageSize=20,
+        paginationPageSizeSelector=[10, 20, 50, 100]
     )
-    plt.xticks(rotation=45, ha='right', fontsize=26)
-    plt.tight_layout()
-    st.pyplot(fig3)
+    
+    # 配置选择
+    gb.configure_selection(selection_mode='single', use_checkbox=True)
+    gb.configure_grid_options(domLayout='normal')
+    
+    grid_options = gb.build()
+    
+    # 显示表格
+    grid_response = AgGrid(
+        df,
+        gridOptions=grid_options,
+        update_mode=GridUpdateMode.MODEL_CHANGED,
+        data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+        fit_columns_on_grid_load=True,
+        enable_enterprise_modules=True,
+        key=key,
+        theme='alpine',
+        custom_css={
+            ".ag-header": {
+                "background-color": "rgba(102, 126, 234, 0.1) !important",
+                "font-weight": "bold",
+                "color": "#2E4053"
+            },
+            ".ag-row": {
+                "font-size": "14px",
+                "transition": "all 0.2s ease"
+            },
+            ".ag-row:hover": {
+                "background-color": "rgba(102, 126, 234, 0.05) !important"
+            }
+        }
+    )
+    
+    return grid_response
 
 
 # 退出登录函数
@@ -455,31 +656,43 @@ def logout():
 
 # 主要内容
 def main_page():
-    # 顶部导航：在登录后可以切换不同功能
-    page_selection = st.sidebar.radio("功能", ["查询统计", "项目配置", "分支配置"], index=0)
+    # 侧边栏导航 - 使用现代化菜单
+    with st.sidebar:
+        selected = option_menu(
+            menu_title=None,
+            options=["📊 查询统计", "⚙️ 项目配置", "🌿 分支配置"],
+            icons=["bar-chart", "gear", "git-branch"],
+            menu_icon="cast",
+            default_index=0,
+            styles={
+                "container": {"padding": "0!important", "background-color": "transparent"},
+                "icon": {"color": "#667eea", "font-size": "1.2rem"},
+                "nav-link": {
+                    "font-size": "1rem",
+                    "text-align": "left",
+                    "margin": "0.5rem 0",
+                    "--hover-color": "rgba(102, 126, 234, 0.1)",
+                },
+                "nav-link-selected": {
+                    "background-color": "rgba(102, 126, 234, 0.15)",
+                    "font-weight": "bold",
+                    "color": "#667eea"
+                },
+            }
+        )
     
-    # 将标题和退出按钮放在同一行
-    col_title, col_space, col_logout = st.columns([7, 2, 1.2])
-    with col_title:
-        # 根据选择的页面显示不同的标题
-        if page_selection == "查询统计":
-            st.markdown("#### 📊 查询统计")
-        elif page_selection == "项目配置":
-            st.markdown("#### ⚙️ 项目配置管理")
-        elif page_selection == "分支配置":
-            st.markdown("#### 🌿 分支配置管理")
-    with col_logout:
-        if st.button("退出登录", key="logout_button", use_container_width=True):
-            logout()
-    # 如果是配置页面，直接渲染对应页面并返回
-    if page_selection == "项目配置":
+    # 根据选择显示不同页面
+    if selected == "⚙️ 项目配置":
         render_webhook_management()
         return
-    elif page_selection == "分支配置":
+    elif selected == "🌿 分支配置":
         render_branch_webhook_management()
         return
     
     # 以下是 Dashboard 页面的内容
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.markdown("#### 📊 查询统计")
+    
     current_date = datetime.date.today()
     start_date_default = current_date - datetime.timedelta(days=7)
 
@@ -487,17 +700,19 @@ def main_page():
     show_push_tab = os.environ.get('PUSH_REVIEW_ENABLED', '0') == '1'
 
     if show_push_tab:
-        mr_tab, push_tab = st.tabs(["合并请求", "代码推送"])
+        mr_tab, push_tab = st.tabs(["🔄 合并请求", "💻 代码推送"])
     else:
         mr_tab = st.container()
 
-    def display_data(tab, service_func, columns, column_config):
+    def display_data(tab, service_func, columns, column_config, key):
         with tab:
+            # 筛选器卡片
+            st.markdown('<div class="chart-container" style="margin-bottom: 1.5rem;">', unsafe_allow_html=True)
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                start_date = st.date_input("开始日期", start_date_default, key=f"{tab}_start_date")
+                start_date = st.date_input("📅 开始日期", start_date_default, key=f"{key}_start_date")
             with col2:
-                end_date = st.date_input("结束日期", current_date, key=f"{tab}_end_date")
+                end_date = st.date_input("📅 结束日期", current_date, key=f"{key}_end_date")
 
             start_datetime = datetime.datetime.combine(start_date, datetime.time.min)
             end_datetime = datetime.datetime.combine(end_date, datetime.time.max)
@@ -509,57 +724,59 @@ def main_page():
             unique_authors = sorted(df["author"].dropna().unique().tolist()) if not df.empty else []
             unique_projects = sorted(df["project_name"].dropna().unique().tolist()) if not df.empty else []
             with col3:
-                authors = st.multiselect("开发者", unique_authors, default=[], key=f"{tab}_authors")
+                authors = st.multiselect("👤 开发者", unique_authors, default=[], key=f"{key}_authors")
             with col4:
-                project_names = st.multiselect("项目名称", unique_projects, default=[], key=f"{tab}_projects")
+                project_names = st.multiselect("🏷️ 项目名称", unique_projects, default=[], key=f"{key}_projects")
+            st.markdown('</div>', unsafe_allow_html=True)
 
             data = get_data(service_func, authors=authors, project_names=project_names,
                             updated_at_gte=int(start_datetime.timestamp()),
                             updated_at_lte=int(end_datetime.timestamp()), columns=columns)
             df = pd.DataFrame(data)
 
-            st.data_editor(
-                df,
-                use_container_width=True,
-                column_config=column_config
-            )
-
+            # 统计信息
             total_records = len(df)
             average_score = df["score"].mean() if not df.empty else 0
-            st.markdown(f"**总记录数:** {total_records}，**平均得分:** {average_score:.2f}")
+            st.markdown(f'<div class="success-box">📊 <b>总记录数:</b> {total_records} | 🎯 <b>平均得分:</b> {average_score:.2f}</div>', unsafe_allow_html=True)
 
-            # 创建2x2网格布局展示四个图表
-            row1, row2, row3, row4 = st.columns(4)
-            with row1:
-                st.markdown("<div style='text-align: center; font-size: 20px;'><b>项目提交统计</b></div>",
-                            unsafe_allow_html=True)
-                generate_project_count_chart(df)
-            with row2:
-                st.markdown("<div style='text-align: center; font-size: 20px;'><b>项目平均得分</b></div>",
-                            unsafe_allow_html=True)
-                generate_project_score_chart(df)
-            with row3:
-                st.markdown("<div style='text-align: center; font-size: 20px;'><b>开发者提交统计</b></div>",
-                            unsafe_allow_html=True)
-                generate_author_count_chart(df)
-            with row4:
-                st.markdown("<div style='text-align: center; font-size: 20px;'><b>开发者平均得分</b></div>",
-                            unsafe_allow_html=True)
-                generate_author_score_chart(df)
+            # 数据表格 - 使用AgGrid
+            display_aggrid(df, column_config, f"{key}_table")
 
-            row5, row6, row7, row8 = st.columns(4)
-            with row5:
-                st.markdown("<div style='text-align: center;'><b>人员代码变更行数</b></div>", unsafe_allow_html=True)
-                # 只有当 additions 和 deletions 列都存在时才显示代码行数图表
-                if 'additions' in df.columns and 'deletions' in df.columns:
-                    generate_author_code_line_chart(df)
-                else:
-                    st.info("无法显示代码行数图表：缺少必要的数据列")
+            # 创建图表网格
+            st.markdown('<br>', unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+                generate_project_count_chart_plotly(df)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+                generate_project_score_chart_plotly(df)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown('<br>', unsafe_allow_html=True)
+            col3, col4 = st.columns(2)
+            
+            with col3:
+                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+                generate_author_count_chart_plotly(df)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col4:
+                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+                generate_author_score_chart_plotly(df)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown('<br>', unsafe_allow_html=True)
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            generate_author_code_line_chart_plotly(df)
+            st.markdown('</div>', unsafe_allow_html=True)
     
     # Merge Request 数据展示
     mr_columns = ["project_name", "author", "source_branch", "target_branch", "updated_at", "commit_messages", "delta",
-                  "score",
-                  "url", 'additions', 'deletions']
+                  "score", "url", 'additions', 'deletions']
 
     mr_column_config = {
         "project_name": "项目名称",
@@ -568,22 +785,32 @@ def main_page():
         "target_branch": "目标分支",
         "updated_at": "更新时间",
         "commit_messages": "提交信息",
-        "score": st.column_config.ProgressColumn(
-            "得分",
-            format="%f",
-            min_value=0,
-            max_value=100,
-        ),
-        "url": st.column_config.LinkColumn(
-            "操作",
-            max_chars=100,
-            display_text="查看详情"
-        ),
+        "score": None,  # 进度条在AgGrid中需要特殊处理
+        "url": {
+            "headerName": "操作",
+            "cellRenderer": JsCode("""
+                class LinkRenderer {
+                    init(params) {
+                        this.eGui = document.createElement('a');
+                        this.eGui.innerText = '查看详情';
+                        this.eGui.href = params.value;
+                        this.eGui.target = '_blank';
+                        this.eGui.style.color = '#667eea';
+                        this.eGui.style.fontWeight = 'bold';
+                        this.eGui.style.textDecoration = 'none';
+                        params.eGui.appendChild(this.eGui);
+                    }
+                    getGui() { return this.eGui; }
+                }
+                return new LinkRenderer();
+            """)
+        },
         "additions": None,
         "deletions": None,
+        "delta": None,
     }
 
-    display_data(mr_tab, ReviewService().get_mr_review_logs, mr_columns, mr_column_config)
+    display_data(mr_tab, ReviewService().get_mr_review_logs, mr_columns, mr_column_config, "mr")
 
     # Push 数据展示
     if show_push_tab:
@@ -596,17 +823,15 @@ def main_page():
             "branch": "分支",
             "updated_at": "更新时间",
             "commit_messages": "提交信息",
-            "score": st.column_config.ProgressColumn(
-                "得分",
-                format="%f",
-                min_value=0,
-                max_value=100,
-            ),
+            "score": None,
             "additions": None,
             "deletions": None,
+            "delta": None,
         }
 
-        display_data(push_tab, ReviewService().get_push_review_logs, push_columns, push_column_config)
+        display_data(push_tab, ReviewService().get_push_review_logs, push_columns, push_column_config, "push")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # 应用入口
