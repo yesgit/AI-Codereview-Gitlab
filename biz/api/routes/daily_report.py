@@ -12,6 +12,7 @@ from flask import Blueprint, jsonify
 from biz.api import push_review_enabled
 from biz.service.review_service import ReviewService
 from biz.service.branch_webhook_service import BranchWebhookService
+from biz.service.webhook_service import WebhookService
 from biz.utils.im.dingtalk import DingTalkNotifier
 from biz.utils.im.feishu import FeishuNotifier
 from biz.utils.im.wecom import WeComNotifier
@@ -198,20 +199,40 @@ def daily_report_task():
                 # 处理未匹配到分支配置的日志（发送到项目级配置或默认配置）
                 if unmatched_logs:
                     logger.info(f"项目 {project_name} 有 {len(unmatched_logs)} 条日志未匹配到分支配置，尝试发送到项目级配置")
-                    project_config = ReviewService().get_webhook_mapping(project_name=project_name)
-                    if project_config:
+                    # 优先使用 gitlab_base_url + project_slug 查询项目配置
+                    project_config = WebhookService.get_webhook_mapping_by_gitlab_project(
+                        gitlab_base_url=gitlab_base_url,
+                        project_slug=project_slug
+                    )
+                    # 如果没找到，回退到旧方式查询
+                    if not project_config:
+                        project_config = ReviewService().get_webhook_mapping(project_name=project_name)
+                    # 检查项目配置是否有效（至少有一个 webhook URL）
+                    if project_config and WebhookService.is_valid_webhook_config(project_config):
+                        logger.info(f"✅ 使用项目级配置发送: {gitlab_base_url}/{project_slug}")
                         send_report_to_config(unmatched_logs, project_config, title_prefix=f"项目:{project_name}")
                     else:
-                        # 发送到默认配置
+                        # 项目配置无效或不存在，发送到默认配置（系统级）
+                        logger.info(f"⚠️ 项目配置无效，使用系统默认配置: {gitlab_base_url}/{project_slug}")
                         send_report_to_config(unmatched_logs, {}, title_prefix=f"项目:{project_name}")
             else:
                 # 没有分支配置，按项目发送
                 logger.info(f"项目 {project_name} 无分支配置，按项目发送")
-                project_config = ReviewService().get_webhook_mapping(project_name=project_name)
-                if project_config:
+                # 优先使用 gitlab_base_url + project_slug 查询项目配置
+                project_config = WebhookService.get_webhook_mapping_by_gitlab_project(
+                    gitlab_base_url=gitlab_base_url,
+                    project_slug=project_slug
+                )
+                # 如果没找到，回退到旧方式查询
+                if not project_config:
+                    project_config = ReviewService().get_webhook_mapping(project_name=project_name)
+                # 检查项目配置是否有效（至少有一个 webhook URL）
+                if project_config and WebhookService.is_valid_webhook_config(project_config):
+                    logger.info(f"✅ 使用项目级配置发送: {gitlab_base_url}/{project_slug}")
                     send_report_to_config(project_logs, project_config, title_prefix=f"项目:{project_name}")
                 else:
-                    # 发送到默认配置
+                    # 项目配置无效或不存在，发送到默认配置（系统级）
+                    logger.info(f"⚠️ 项目配置无效，使用系统默认配置: {gitlab_base_url}/{project_slug}")
                     send_report_to_config(project_logs, {}, title_prefix=f"项目:{project_name}")
         
         logger.info("日报任务执行完成")
@@ -292,20 +313,40 @@ def daily_report():
                 # 处理未匹配到分支配置的日志（发送到项目级配置或默认配置）
                 if unmatched_logs:
                     logger.info(f"项目 {project_name} 有 {len(unmatched_logs)} 条日志未匹配到分支配置，尝试发送到项目级配置")
-                    project_config = ReviewService().get_webhook_mapping(project_name=project_name)
-                    if project_config:
+                    # 优先使用 gitlab_base_url + project_slug 查询项目配置
+                    project_config = WebhookService.get_webhook_mapping_by_gitlab_project(
+                        gitlab_base_url=gitlab_base_url,
+                        project_slug=project_slug
+                    )
+                    # 如果没找到，回退到旧方式查询
+                    if not project_config:
+                        project_config = ReviewService().get_webhook_mapping(project_name=project_name)
+                    # 检查项目配置是否有效（至少有一个 webhook URL）
+                    if project_config and WebhookService.is_valid_webhook_config(project_config):
+                        logger.info(f"✅ 使用项目级配置发送: {gitlab_base_url}/{project_slug}")
                         send_report_to_config(unmatched_logs, project_config, title_prefix=f"项目:{project_name}")
                     else:
-                        # 发送到默认配置
+                        # 项目配置无效或不存在，发送到默认配置（系统级）
+                        logger.info(f"⚠️ 项目配置无效，使用系统默认配置: {gitlab_base_url}/{project_slug}")
                         send_report_to_config(unmatched_logs, {}, title_prefix=f"项目:{project_name}")
             else:
                 # 没有分支配置，按项目发送
                 logger.info(f"项目 {project_name} 无分支配置，按项目发送")
-                project_config = ReviewService().get_webhook_mapping(project_name=project_name)
-                if project_config:
+                # 优先使用 gitlab_base_url + project_slug 查询项目配置
+                project_config = WebhookService.get_webhook_mapping_by_gitlab_project(
+                    gitlab_base_url=gitlab_base_url,
+                    project_slug=project_slug
+                )
+                # 如果没找到，回退到旧方式查询
+                if not project_config:
+                    project_config = ReviewService().get_webhook_mapping(project_name=project_name)
+                # 检查项目配置是否有效（至少有一个 webhook URL）
+                if project_config and WebhookService.is_valid_webhook_config(project_config):
+                    logger.info(f"✅ 使用项目级配置发送: {gitlab_base_url}/{project_slug}")
                     send_report_to_config(project_logs, project_config, title_prefix=f"项目:{project_name}")
                 else:
-                    # 发送到默认配置
+                    # 项目配置无效或不存在，发送到默认配置（系统级）
+                    logger.info(f"⚠️ 项目配置无效，使用系统默认配置: {gitlab_base_url}/{project_slug}")
                     send_report_to_config(project_logs, {}, title_prefix=f"项目:{project_name}")
 
         # 返回成功信息
