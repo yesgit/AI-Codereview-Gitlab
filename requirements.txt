@@ -1,3 +1,4 @@
+alembic>=1.0.0
 anthropic==0.39.0
 Flask==3.0.3
 APScheduler==3.10.4
@@ -29,3 +30,8 @@ plotly>=5.18.0
 # Streamlit 现代化组件
 streamlit-option-menu>=0.4.0
 streamlit-aggrid>=0.3.4.post3
+
+# FastAPI Dashboard 依赖
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.6

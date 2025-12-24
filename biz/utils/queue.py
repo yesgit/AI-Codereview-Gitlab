@@ -19,7 +19,20 @@ def handle_queue(function: callable, data: any, token: str, url: str, url_slug: 
             from redis import Redis
             from rq import Queue
             
-            redis_url = os.getenv('REDIS_URL', 'redis://redis:6379')
+            # 支持 REDIS_URL 或 REDIS_HOST/PORT/DB
+            if os.getenv('REDIS_URL'):
+                redis_url = os.getenv('REDIS_URL')
+            else:
+                redis_host = os.getenv('REDIS_HOST', 'redis')
+                redis_port = os.getenv('REDIS_PORT', '6379')
+                redis_db = os.getenv('REDIS_DB', '0')
+                redis_password = os.getenv('REDIS_PASSWORD', '')
+                
+                if redis_password:
+                    redis_url = f'redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}'
+                else:
+                    redis_url = f'redis://{redis_host}:{redis_port}/{redis_db}'
+            
             queue_name = os.getenv('WORKER_QUEUE', 'default')
             
             redis_conn = Redis.from_url(redis_url)
@@ -65,7 +78,20 @@ def retry_task(function: callable, data: any, token: str, url: str, url_slug: st
             from rq import Queue
             from rq.job import JobStatus
             
-            redis_url = os.getenv('REDIS_URL', 'redis://redis:6379')
+            # 支持 REDIS_URL 或 REDIS_HOST/PORT/DB
+            if os.getenv('REDIS_URL'):
+                redis_url = os.getenv('REDIS_URL')
+            else:
+                redis_host = os.getenv('REDIS_HOST', 'redis')
+                redis_port = os.getenv('REDIS_PORT', '6379')
+                redis_db = os.getenv('REDIS_DB', '0')
+                redis_password = os.getenv('REDIS_PASSWORD', '')
+                
+                if redis_password:
+                    redis_url = f'redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}'
+                else:
+                    redis_url = f'redis://{redis_host}:{redis_port}/{redis_db}'
+            
             queue_name = os.getenv('WORKER_QUEUE', 'default')
             
             redis_conn = Redis.from_url(redis_url)

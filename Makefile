@@ -20,13 +20,13 @@ build-app:
 	@echo "构建 app 镜像: $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION) for $(PLATFORM)"
 	# 使用 buildx，--load 会将镜像加载到本地 docker（需要 buildx driver 支持）
 	# 确保使用最新代码而不是缓存
-	docker buildx build --platform $(PLATFORM) --no-cache --load -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION) \
+	docker buildx build --platform $(PLATFORM) --load -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION) \
 		-f Dockerfile --target app .
 
 build-worker:
 	@echo "构建 worker 镜像: $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION)-worker for $(PLATFORM)"
 	# 确保使用最新代码而不是缓存
-	docker buildx build --platform $(PLATFORM) --no-cache --load -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION)-worker \
+	docker buildx build --platform $(PLATFORM) --load -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION)-worker \
 		-f Dockerfile --target worker .
 
 clean-images:
@@ -52,12 +52,12 @@ push: push-app push-worker
 
 buildx-push-app:
 	@echo "使用 buildx 构建并推送 app 镜像 ($(PLATFORM))"
-	docker buildx build --platform $(PLATFORM) --no-cache --push -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION) \
+	docker buildx build --platform $(PLATFORM) --push -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION) \
 		-f Dockerfile --target app .
 
 buildx-push-worker:
 	@echo "使用 buildx 构建并推送 worker 镜像 ($(PLATFORM))"
-	docker buildx build --platform $(PLATFORM) --no-cache --push -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION)-worker \
+	docker buildx build --platform $(PLATFORM) --push -t $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION)-worker \
 		-f Dockerfile --target worker .
 
 buildx-push: buildx-push-app buildx-push-worker

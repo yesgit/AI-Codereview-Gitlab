@@ -1,54 +1,89 @@
-# 使用官方的 Python 基础镜像作为基础层
+# Base stage - common Python dependencies
 FROM python:3.11-slim AS base
-
-# 设置工作目录
 WORKDIR /app
 
-# 安装 supervisord、MySQL 客户端和其他依赖
-# 添加重试机制应对网络问题
-RUN apt-get update && \
-    for i in 1 2 3; do apt-get install -y --no-install-recommends \
-        supervisor \
-        default-mysql-client \
-        unzip \
-        curl \
-        && break || sleep 5; done && \
-    rm -rf /var/lib/apt/lists/*
+# Install redis-cli for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends redis-tools && rm -rf /var/lib/apt/lists/*
 
-# 复制并安装依赖
-COPY requirements.txt ./
-# 使用国内镜像源加速 pip 安装，启用 cache 提高速度
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 创建必要目录并复制公共文件
-RUN mkdir -p /app/log /app/data /app/conf
-COPY biz ./biz
-COPY fonts ./fonts
-COPY api.py ./api.py
-COPY ui.py ./ui.py
-COPY conf/prompt_templates.yml ./conf/prompt_templates.yml
+# Frontend build stage
+FROM node:18-slim AS frontend-builder
+WORKDIR /app/frontend
 
-# 复制 Alembic 数据库迁移文件
-COPY alembic.ini ./alembic.ini
-COPY alembic ./alembic
+# Copy frontend package files
+COPY frontend/package.json frontend/package-lock.json ./
 
-# 复制 Docker 入口脚本并设置权限
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+# Install dependencies
+RUN npm install
 
-# App stage：用于运行 Web 应用（Flask + Streamlit）
+# Copy frontend source code
+COPY frontend/ ./
+
+# Build frontend
+RUN npm run build
+
+# App stage - FastAPI + Pre-built Frontend
 FROM base AS app
-COPY conf/supervisord.app.conf /etc/supervisor/conf.d/supervisord.conf
-# 暴露 Flask 和 Streamlit 的端口
-EXPOSE 5001 5002
-# 使用入口脚本自动执行数据库迁移
-ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+WORKDIR /app
 
-# Worker stage：用于运行后台任务队列/worker
+# Copy Python packages
+COPY --from=base /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=base /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY docker-entrypoint.sh .
+COPY alembic.ini .
+COPY alembic ./alembic
+COPY api ./api
+COPY biz ./biz
+COPY conf ./conf
+
+# Copy built frontend from frontend-builder stage
+COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+
+# Make entrypoint script executable
+RUN chmod +x docker-entrypoint.sh
+
+# Create data and log directories
+RUN mkdir -p /app/data /app/log
+
+# Expose port
+EXPOSE 5001
+
+# Set entrypoint
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+# Run application
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "5001"]
+
+# Worker stage - for background tasks (doesn't need frontend)
 FROM base AS worker
-COPY conf/supervisord.worker.conf /etc/supervisor/conf.d/supervisord.conf
-# 使用入口脚本自动执行数据库迁移
-ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+WORKDIR /app
+
+# Copy Python packages
+COPY --from=base /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=base /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY docker-entrypoint.sh .
+COPY alembic.ini .
+COPY alembic ./alembic
+COPY api ./api
+COPY biz ./biz
+COPY conf ./conf
+
+# Make entrypoint script executable
+RUN chmod +x docker-entrypoint.sh
+
+# Create data and log directories
+RUN mkdir -p /app/data /app/log
+
+# Set entrypoint for worker
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+# 根据队列驱动决定启动方式
+# multiprocessing: 不需要独立 worker（由 app 处理），保持容器运行
+# rq: 启动 RQ worker
+CMD ["sh", "-c", "if [ \"$QUEUE_DRIVER\" = \"rq\" ]; then exec /app/docker-entrypoint.sh \"worker\"; else echo '⚠️  multiprocessing mode: worker not needed, keeping container alive'; tail -f /dev/null; fi"]

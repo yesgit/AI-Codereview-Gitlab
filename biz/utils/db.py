@@ -6,7 +6,6 @@
 - DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME: MySQL 连接信息
 """
 import os
-import time
 from functools import lru_cache
 
 from sqlalchemy import create_engine
@@ -14,6 +13,16 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from biz.utils.log import logger
+
+
+def init_db():
+    """Initialize the database connection by caching the engine.
+    
+    This function is called on application startup to ensure the database
+    is ready for use. It primarily creates the engine through get_engine().
+    """
+    get_engine()
+    logger.info("Database initialized successfully")
 
 
 @lru_cache()
@@ -59,4 +68,3 @@ def get_connection():
     """
     engine = get_engine()
     return engine.connect()
-

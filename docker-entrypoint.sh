@@ -23,6 +23,32 @@ if [ -n "$MYSQL_HOST" ]; then
     echo "✅ MySQL is ready!"
 fi
 
+# 等待 Redis 就绪
+echo "⏳ Waiting for Redis to be ready..."
+REDIS_HOST="${REDIS_HOST:-redis}"
+REDIS_PORT="${REDIS_PORT:-6379}"
+REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+max_tries=30
+tries=0
+
+# 构建 redis-cli 命令
+until [ $tries -eq $max_tries ]; do
+    if [ -n "$REDIS_PASSWORD" ]; then
+        redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" ping &> /dev/null && break
+    else
+        redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping &> /dev/null && break
+    fi
+    tries=$((tries + 1))
+    echo "  Redis not ready yet (attempt $tries/$max_tries)..."
+    sleep 2
+done
+
+if [ $tries -eq $max_tries ]; then
+    echo "❌ Failed to connect to Redis after $max_tries attempts"
+    exit 1
+fi
+echo "✅ Redis is ready!"
+
 # 执行数据库迁移
 echo "📦 Running database migrations..."
 if alembic upgrade head; then
@@ -33,4 +59,14 @@ fi
 
 # 启动应用
 echo "🎉 Starting application services..."
-exec "$@"
+
+# 检查是 worker 还是 app
+if [[ "$@" == *"worker"* ]]; then
+    echo "👷 Starting RQ worker..."
+    echo "   Redis URL: ${REDIS_URL:-redis://redis:6379/0}"
+    echo "   Queue: ${WORKER_QUEUE:-default}"
+    # 启动 RQ worker
+    exec rq worker --url "${REDIS_URL:-redis://redis:6379/0}" --log-format="%(asctime)s: %(message)s" "${WORKER_QUEUE:-default}"
+else
+    exec "$@"
+fi

@@ -1,14 +1,15 @@
+version: '3.8'
+
 services:
-  # Streamlit UI
   app:
     build:
       context: .
       dockerfile: Dockerfile
       target: app
-    image: docker.io/hedw/ai-codereview-gitlab:1.4.2
+    image: hedw/ai-codereview-gitlab:1.4.2
+    container_name: ai-codereview-api
     ports:
-      - "5001:5001"      # Flask API
-      - "5002:5002"      # Streamlit UI
+      - "5002:5001" # FastAPI (serves frontend) - 临时改用 5002 端口避免冲突
     volumes:
       - ./data:/app/data
       - ./log:/app/log
@@ -19,13 +20,20 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    networks:
+      - ai-codereview-network
     restart: unless-stopped
+
   worker:
     build:
       context: .
       dockerfile: Dockerfile
       target: worker
-    image: docker.io/hedw/ai-codereview-gitlab-worker:1.4.2
+    image: hedw/ai-codereview-gitlab:1.4.2-worker
+    container_name: ai-codereview-worker
+    volumes:
+      - ./data:/app/data
+      - ./log:/app/log
     env_file:
       - ./conf/.env
     depends_on:
@@ -33,32 +41,38 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    networks:
+      - ai-codereview-network
     restart: unless-stopped
+
   redis:
-    image: redis:7-alpine
-    # ports:
-    #   - "6379:6379"  # 不暴露到主机，避免端口冲突
+    image: redis:alpine
+    container_name: ai-codereview-redis
+    # ports:移除端口映射，容器间通信不需要暴露到主机
+    #   - "6379:6379"
+    networks:
+      - ai-codereview-network
     restart: unless-stopped
+
   mysql:
     image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: changeme
-      MYSQL_DATABASE: ai_codereview
-      MYSQL_USER: aiuser
-      MYSQL_PASSWORD: aipassword
+    container_name: ai-codereview-mysql
+    env_file:
+      - ./conf/.env
     volumes:
-      - mysql_data:/var/lib/mysql
-    ports:
-      - "3306:3306"
+      - ./mysql_data:/var/lib/mysql
+    # ports:移除端口映射，容器间通信不需要暴露到主机
+    #   - "3306:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uaiuser", "-paipassword"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 30s
+    networks:
+      - ai-codereview-network
     restart: unless-stopped
 
-volumes:
-  data:
-  log:
-  mysql_data:
+networks:
+  ai-codereview-network:
+    driver: bridge
