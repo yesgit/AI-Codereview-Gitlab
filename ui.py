@@ -456,14 +456,14 @@ def logout():
 # 主要内容
 def main_page():
     # 顶部导航：在登录后可以切换不同功能
-    page_selection = st.sidebar.radio("功能", ["代码审查统计", "项目配置", "分支配置"], index=0)
+    page_selection = st.sidebar.radio("功能", ["查询统计", "项目配置", "分支配置"], index=0)
     
     # 将标题和退出按钮放在同一行
     col_title, col_space, col_logout = st.columns([7, 2, 1.2])
     with col_title:
         # 根据选择的页面显示不同的标题
-        if page_selection == "代码审查统计":
-            st.markdown("#### 📊 代码审查统计")
+        if page_selection == "查询统计":
+            st.markdown("#### 📊 查询统计")
         elif page_selection == "项目配置":
             st.markdown("#### ⚙️ 项目配置管理")
         elif page_selection == "分支配置":
