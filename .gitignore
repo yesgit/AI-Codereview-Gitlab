@@ -24,6 +24,7 @@ log/
 !log/.gitkeep
 data/
 !data/.gitkeep
+mysql_data/
 
 # Config
 conf/.env
