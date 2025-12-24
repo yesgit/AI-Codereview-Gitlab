@@ -1,4 +1,5 @@
 import os
+import time
 from multiprocessing import Process
 
 from biz.utils.log import logger
@@ -41,3 +42,67 @@ def _handle_with_multiprocessing(function: callable, data: any, token: str, url:
     process = Process(target=function, args=(data, token, url, url_slug))
     process.start()
     logger.info(f'Task started in new process: {process.pid}')
+
+
+def retry_task(function: callable, data: any, token: str, url: str, url_slug: str, delay: int = 60):
+    """
+    重试失败的任务，支持两种模式：
+    1. RQ (Redis Queue) - 延迟重试
+    2. Multiprocessing - 延迟后重新启动进程
+    
+    :param function: 要重试的函数
+    :param data: 任务数据
+    :param token: GitLab/GitHub token
+    :param url: GitLab/GitHub URL
+    :param url_slug: URL 标识
+    :param delay: 延迟秒数
+    """
+    queue_driver = os.getenv('QUEUE_DRIVER', 'multiprocessing').lower()
+    
+    if queue_driver == 'rq':
+        try:
+            from redis import Redis
+            from rq import Queue
+            from rq.job import JobStatus
+            
+            redis_url = os.getenv('REDIS_URL', 'redis://redis:6379')
+            queue_name = os.getenv('WORKER_QUEUE', 'default')
+            
+            redis_conn = Redis.from_url(redis_url)
+            q = Queue(queue_name, connection=redis_conn)
+            
+            # 使用 scheduled_at 参数实现延迟重试
+            scheduled_time = time.time() + delay
+            job = q.enqueue_in(
+                delay,
+                function,
+                data,
+                token,
+                url,
+                url_slug,
+                job_timeout='30m',
+                result_ttl=86400  # 保留结果24小时
+            )
+            logger.info(f'Task scheduled for retry in {delay}s: {job.id}')
+        except Exception as e:
+            logger.error(f'Failed to schedule retry with RQ: {e}. Falling back to multiprocessing.')
+            # 失败时使用多进程模式重试
+            _retry_with_multiprocessing(function, data, token, url, url_slug, delay)
+    else:
+        # 使用多进程模式重试
+        _retry_with_multiprocessing(function, data, token, url, url_slug, delay)
+
+
+def _retry_with_multiprocessing(function: callable, data: any, token: str, url: str, url_slug: str, delay: int):
+    """使用多进程延迟重试任务"""
+    def delayed_retry():
+        time.sleep(delay)
+        process = Process(target=function, args=(data, token, url, url_slug))
+        process.start()
+        logger.info(f'Retry task started in new process after {delay}s: {process.pid}')
+    
+    # 在新线程中执行延迟重试，避免阻塞
+    import threading
+    retry_thread = threading.Thread(target=delayed_retry, daemon=True)
+    retry_thread.start()
+    logger.info(f'Task scheduled for retry in {delay}s using multiprocessing')

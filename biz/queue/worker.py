@@ -1,8 +1,10 @@
 import os
 import traceback
 from datetime import datetime
+from typing import Any
 
 from biz.entity.review_entity import MergeRequestReviewEntity, PushReviewEntity
+from biz.utils.queue import retry_task
 from biz.event.event_manager import event_manager
 from biz.gitlab.webhook_handler import filter_changes, MergeRequestHandler, PushHandler, _normalize_base_url
 from biz.github.webhook_handler import filter_changes as filter_github_changes, PullRequestHandler as GithubPullRequestHandler, PushHandler as GithubPushHandler
@@ -12,6 +14,70 @@ from biz.service.review_service import ReviewService
 from biz.utils.code_reviewer import CodeReviewer
 from biz.utils.im import notifier
 from biz.utils.log import logger
+
+
+# 可重试的异常类型
+RETRYABLE_EXCEPTIONS = (
+    'openai.APITimeoutError',
+    'openai.APIConnectionError',
+    'openai.RateLimitError',
+    'httpx.TimeoutException',
+    'httpx.ConnectTimeout',
+    'httpx.ReadTimeout',
+    'ConnectionError',
+    'TimeoutError',
+)
+
+
+def is_retryable_error(error: Exception) -> bool:
+    """判断异常是否可重试"""
+    error_name = type(error).__name__
+    error_module = type(error).__module__
+    
+    # 检查异常类型名称
+    for retryable in RETRYABLE_EXCEPTIONS:
+        if error_name == retryable.split('.')[-1] or \
+           f"{error_module}.{error_name}" == retryable:
+            return True
+    
+    # 检查异常消息
+    error_msg = str(error).lower()
+    retryable_keywords = ['timeout', 'connection', 'rate limit', 'temporarily unavailable']
+    if any(keyword in error_msg for keyword in retryable_keywords):
+        return True
+    
+    return False
+
+
+def increment_retry_count(webhook_data: dict) -> int:
+    """增加重试计数并返回当前重试次数"""
+    retry_count = webhook_data.get('_retry_count', 0)
+    webhook_data['_retry_count'] = retry_count + 1
+    return retry_count + 1
+
+
+def should_retry(webhook_data: dict) -> bool:
+    """判断是否应该重试"""
+    max_retries = int(os.getenv('MAX_RETRIES', '3'))
+    current_retries = webhook_data.get('_retry_count', 0)
+    return current_retries < max_retries
+
+
+def handle_retry(webhook_data: dict, exception: Exception, handler_function, *args):
+    """处理重试逻辑"""
+    retry_count = increment_retry_count(webhook_data)
+    max_retries = int(os.getenv('MAX_RETRIES', '3'))
+    delay = int(os.getenv('RETRY_DELAY_SECONDS', '60'))
+    
+    logger.warning(f"任务失败 (第 {retry_count}/{max_retries} 次重试): {type(exception).__name__}: {str(exception)}")
+    
+    if retry_count < max_retries:
+        logger.info(f"将在 {delay} 秒后重试...")
+        retry_task(handler_function, webhook_data, *args, delay=delay)
+    else:
+        logger.error(f"已达到最大重试次数 {max_retries}，放弃重试")
+        error_message = f'任务重试 {max_retries} 次后仍然失败: {str(exception)}\n{traceback.format_exc()}'
+        notifier.send_notification(content=error_message)
 
 
 
@@ -155,9 +221,13 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
                 continue
 
     except Exception as e:
-        error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
-        notifier.send_notification(content=error_message)
-        logger.error('出现未知错误: %s', error_message)
+        # 判断是否为可重试的异常
+        if is_retryable_error(e):
+            handle_retry(webhook_data, e, handle_push_event, gitlab_token, gitlab_url, gitlab_url_slug)
+        else:
+            error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
+            notifier.send_notification(content=error_message)
+            logger.error('出现未知错误: %s', error_message)
 
 
 def handle_merge_request_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gitlab_url_slug: str):
@@ -255,9 +325,13 @@ def handle_merge_request_event(webhook_data: dict, gitlab_token: str, gitlab_url
         )
 
     except Exception as e:
-        error_message = f'AI Code Review 服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
-        notifier.send_notification(content=error_message)
-        logger.error('出现未知错误: %s', error_message)
+        # 判断是否为可重试的异常
+        if is_retryable_error(e):
+            handle_retry(webhook_data, e, handle_merge_request_event, gitlab_token, gitlab_url, gitlab_url_slug)
+        else:
+            error_message = f'AI Code Review 服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
+            notifier.send_notification(content=error_message)
+            logger.error('出现未知错误: %s', error_message)
 
 def handle_github_push_event(webhook_data: dict, github_token: str, github_url: str, github_url_slug: str):
     push_review_enabled = os.environ.get('PUSH_REVIEW_ENABLED', '0') == '1'
@@ -309,9 +383,13 @@ def handle_github_push_event(webhook_data: dict, github_token: str, github_url: 
         ))
 
     except Exception as e:
-        error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
-        notifier.send_notification(content=error_message)
-        logger.error('出现未知错误: %s', error_message)
+        # 判断是否为可重试的异常
+        if is_retryable_error(e):
+            handle_retry(webhook_data, e, handle_github_push_event, github_token, github_url, github_url_slug)
+        else:
+            error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
+            notifier.send_notification(content=error_message)
+            logger.error('出现未知错误: %s', error_message)
 
 
 def handle_github_pull_request_event(webhook_data: dict, github_token: str, github_url: str, github_url_slug: str):
@@ -398,9 +476,13 @@ def handle_github_pull_request_event(webhook_data: dict, github_token: str, gith
             ))
 
     except Exception as e:
-        error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
-        notifier.send_notification(content=error_message)
-        logger.error('出现未知错误: %s', error_message)
+        # 判断是否为可重试的异常
+        if is_retryable_error(e):
+            handle_retry(webhook_data, e, handle_github_pull_request_event, github_token, github_url, github_url_slug)
+        else:
+            error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
+            notifier.send_notification(content=error_message)
+            logger.error('出现未知错误: %s', error_message)
 
 
 def handle_gitea_push_event(webhook_data: dict, gitea_token: str, gitea_url: str, gitea_url_slug: str):
@@ -454,9 +536,13 @@ def handle_gitea_push_event(webhook_data: dict, gitea_token: str, gitea_url: str
         ))
 
     except Exception as e:
-        error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
-        notifier.send_notification(content=error_message)
-        logger.error('出现未知错误: %s', error_message)
+        # 判断是否为可重试的异常
+        if is_retryable_error(e):
+            handle_retry(webhook_data, e, handle_gitea_push_event, gitea_token, gitea_url, gitea_url_slug)
+        else:
+            error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
+            notifier.send_notification(content=error_message)
+            logger.error('出现未知错误: %s', error_message)
 
 
 def handle_gitea_pull_request_event(webhook_data: dict, gitea_token: str, gitea_url: str, gitea_url_slug: str):
@@ -535,6 +621,10 @@ def handle_gitea_pull_request_event(webhook_data: dict, gitea_token: str, gitea_
             ))
 
     except Exception as e:
-        error_message = f'AI Code Review 服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
-        notifier.send_notification(content=error_message)
-        logger.error('出现未知错误: %s', error_message)
+        # 判断是否为可重试的异常
+        if is_retryable_error(e):
+            handle_retry(webhook_data, e, handle_gitea_pull_request_event, gitea_token, gitea_url, gitea_url_slug)
+        else:
+            error_message = f'AI Code Review 服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
+            notifier.send_notification(content=error_message)
+            logger.error('出现未知错误: %s', error_message)
