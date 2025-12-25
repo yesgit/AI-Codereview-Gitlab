@@ -14,7 +14,8 @@ from biz.queue.worker import (
     handle_github_pull_request_event,
     handle_github_push_event,
     handle_gitea_pull_request_event,
-    handle_gitea_push_event
+    handle_gitea_push_event,
+    handle_note_event
 )
 from biz.utils.log import logger
 from biz.utils.queue import handle_queue
@@ -104,8 +105,11 @@ async def handle_gitlab_webhook(data: dict, request: Request):
     elif object_kind == "push":
         handle_queue(handle_push_event, data, gitlab_token, gitlab_url, gitlab_url_slug)
         return {"message": f'Request received(object_kind={object_kind}), will process asynchronously.'}, 200
+    elif object_kind == "note":
+        handle_queue(handle_note_event, data, gitlab_token, gitlab_url, gitlab_url_slug)
+        return {"message": f'Request received(object_kind={object_kind}), will process asynchronously.'}, 200
     else:
-        error_message = f'Only merge_request and push events are supported (both Webhook and System Hook), but received: {object_kind}.'
+        error_message = f'Only merge_request, push and note events are supported (both Webhook and System Hook), but received: {object_kind}.'
         logger.error(error_message)
         return {"error": error_message}, 400
 

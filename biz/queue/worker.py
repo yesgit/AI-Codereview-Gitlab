@@ -6,7 +6,8 @@ from typing import Any
 from biz.entity.review_entity import MergeRequestReviewEntity, PushReviewEntity
 from biz.utils.queue import retry_task
 from biz.event.event_manager import event_manager
-from biz.gitlab.webhook_handler import filter_changes, MergeRequestHandler, PushHandler, _normalize_base_url
+from biz.gitlab.webhook_handler import filter_changes, MergeRequestHandler, PushHandler, NoteHandler, _normalize_base_url
+from biz.gitlab.ai_trigger_utils import contains_ai_trigger, should_skip_ai_note, format_ai_review_result
 from biz.github.webhook_handler import filter_changes as filter_github_changes, PullRequestHandler as GithubPullRequestHandler, PushHandler as GithubPushHandler
 from biz.gitea.webhook_handler import filter_changes as filter_gitea_changes, PullRequestHandler as GiteaPullRequestHandler, \
     PushHandler as GiteaPushHandler
@@ -198,7 +199,7 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
                                     'Content-Type': 'application/json'
                                 }
                                 data = {
-                                    'note': f'[{author_name}] Auto Review Result: \n{review_result}'
+                                    'note': f'🤖 AI Code Review Result (by {author_name})\n\n{review_result}'
                                 }
                                 import requests
                                 response = requests.post(url, headers=headers, json=data, verify=False)
@@ -235,7 +236,228 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
         else:
             error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
             notifier.send_notification(content=error_message)
+def handle_note_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gitlab_url_slug: str):
+    """
+    处理 GitLab note 事件（@AI 触发评审）
+    
+    支持两种场景：
+    1. 在 commit 上评论 @AI → 触发单个 commit 的代码评审
+    2. 在 MR 上评论 @AI → 触发整个 MR 的代码评审
+    """
+    try:
+        # 解析 note 事件
+        handler = NoteHandler(webhook_data, gitlab_token, gitlab_url)
+        logger.info(f'Note Hook event received, note_type={handler.note_type}')
+        
+        # 检查是否为有效的 note 事件
+        if handler.note_type not in ['Commit', 'MergeRequest']:
+            logger.info(f"Unsupported note_type: {handler.note_type}, only Commit and MergeRequest are supported.")
+            return
+        
+        # 获取评论内容
+        note_body = handler.note_body
+        
+        # 检查是否为 AI 系统添加的评论（避免死循环）
+        if should_skip_ai_note(note_body):
+            logger.info("Skipping AI system added comment to avoid infinite loop.")
+            return
+        
+        # 检查是否包含 @AI 触发词
+        if not contains_ai_trigger(note_body):
+            logger.info("Note does not contain @AI trigger, skipping.")
+            return
+        
+        # 提取 gitlab_base_url 和 project_slug
+        gitlab_base_url = _normalize_base_url(gitlab_url)
+        project_slug = webhook_data.get('project', {}).get('path_with_namespace')
+        project_name = webhook_data.get('project', {}).get('name')
+        
+        # 根据 note_type 处理不同的评审场景
+        if handler.note_type == 'Commit':
+            _handle_commit_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slug, 
+                                   gitlab_base_url, project_slug, project_name, note_body)
+        elif handler.note_type == 'MergeRequest':
+            _handle_mr_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slug,
+                                gitlab_base_url, project_slug, project_name, note_body, webhook_data)
+        
+    except Exception as e:
+        # 判断是否为可重试的异常
+        if is_retryable_error(e):
+            handle_retry(webhook_data, e, handle_note_event, gitlab_token, gitlab_url, gitlab_url_slug)
+        else:
+            error_message = f'AI Code Review 服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
+            notifier.send_notification(content=error_message)
             logger.error('出现未知错误: %s', error_message)
+
+
+def _handle_commit_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slug,
+                             gitlab_base_url, project_slug, project_name, note_body):
+    """处理 commit 上的 @AI 评审"""
+    try:
+        logger.info(f"Handling @AI review for commit {handler.commit_id}")
+        
+        # 获取 commit diff
+        changes = handler.get_commit_diff()
+        if not changes:
+            logger.info(f"Commit {handler.commit_id} has no changes or failed to fetch diff.")
+            handler.add_commit_comment("⚠️ 未获取到代码变更或变更不支持的文件类型。")
+            return
+        
+        # 过滤变更
+        changes = filter_changes(changes)
+        if not changes:
+            logger.info(f"Commit {handler.commit_id} has no supported file changes.")
+            handler.add_commit_comment("⚠️ 关注的文件没有修改。")
+            return
+        
+        # 统计变更
+        additions = 0
+        deletions = 0
+        for item in changes:
+            additions += item.get('additions', 0)
+            deletions += item.get('deletions', 0)
+        
+        # 获取 commit 信息（从 webhook_data 或通过 API）
+        commit_message = "Review triggered by @AI comment"
+        commit_author = handler.author
+        
+        # 执行代码评审
+        code_reviewer = CodeReviewer()
+        review_result = code_reviewer.review_changes_in_batches(changes, commit_message, project_name)
+        score = CodeReviewer.parse_review_score(review_text=review_result)
+        
+        # 格式化评审结果（添加触发源标识）
+        formatted_result = format_ai_review_result(
+            review_result,
+            trigger_type=f"@AI comment by {handler.author} on commit {handler.commit_id[:8]}"
+        )
+        
+        # 添加评论到 commit
+        handler.add_commit_comment(formatted_result)
+        
+        # 发送 push_reviewed 事件（复用现有表记录）
+        event_manager['push_reviewed'].send(PushReviewEntity(
+            project_name=project_name,
+            author=handler.author,
+            branch="N/A",  # commit 评审没有分支信息
+            updated_at=int(datetime.now().timestamp()),
+            commits=[{
+                'message': commit_message,
+                'author': commit_author,
+                'timestamp': str(datetime.now()),
+            }],
+            score=score,
+            review_result=formatted_result,
+            url_slug=gitlab_url_slug,
+            webhook_data={'object_kind': 'note'},  # 标识来源
+            additions=additions,
+            deletions=deletions,
+            gitlab_base_url=gitlab_base_url,
+            project_slug=project_slug,
+        ))
+        
+        logger.info(f"Successfully completed @AI review for commit {handler.commit_id}")
+        
+    except Exception as e:
+        logger.error(f"Error handling commit note review: {str(e)}")
+        # 向用户反馈错误
+        handler.add_commit_comment(f"❌ AI 评审失败: {str(e)}")
+
+
+def _handle_mr_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slug,
+                         gitlab_base_url, project_slug, project_name, note_body, webhook_data):
+    """处理 MR 上的 @AI 评审"""
+    try:
+        logger.info(f"Handling @AI review for MR {handler.mr_iid}")
+        
+        # 获取 MR changes
+        changes = handler.get_merge_request_changes()
+        if not changes:
+            logger.info(f"MR {handler.mr_iid} has no changes or failed to fetch diff.")
+            handler.add_merge_request_comment("⚠️ 未获取到代码变更或变更不支持的文件类型。")
+            return
+        
+        # 过滤变更
+        changes = filter_changes(changes)
+        if not changes:
+            logger.info(f"MR {handler.mr_iid} has no supported file changes.")
+            handler.add_merge_request_comment("⚠️ 关注的文件没有修改。")
+            return
+        
+        # 统计变更
+        additions = 0
+        deletions = 0
+        for item in changes:
+            additions += item.get('additions', 0)
+            deletions += item.get('deletions', 0)
+        
+        # 获取 MR commits
+        # 从 webhook_data 中获取 MR 信息
+        merge_request = webhook_data.get('merge_request', {})
+        
+        # 如果 webhook_data 中没有 merge_request，需要通过 API 获取
+        if not merge_request:
+            import requests
+            from urllib.parse import urljoin
+            base = _normalize_base_url(gitlab_url)
+            if base:
+                url = urljoin(base, f"api/v4/projects/{handler.project_id}/merge_requests/{handler.mr_iid}")
+                headers = {'Private-Token': gitlab_token}
+                response = requests.get(url, headers=headers, verify=False)
+                if response.status_code == 200:
+                    merge_request = response.json()
+        
+        commits = merge_request.get('commits', []) or []
+        if not commits:
+            logger.warn(f"MR {handler.mr_iid} has no commits.")
+            commits = [{'title': 'Review triggered by @AI comment'}]
+        
+        # 执行代码评审
+        commits_text = ';'.join(commit.get('title', '') for commit in commits)
+        code_reviewer = CodeReviewer()
+        review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
+        score = CodeReviewer.parse_review_score(review_text=review_result)
+        
+        # 格式化评审结果（添加触发源标识）
+        formatted_result = format_ai_review_result(
+            review_result,
+            trigger_type=f"@AI comment by {handler.author} on MR #{handler.mr_iid}"
+        )
+        
+        # 添加评论到 MR
+        handler.add_merge_request_comment(formatted_result)
+        
+        # 发送 merge_request_reviewed 事件（复用现有表记录）
+        object_attributes = webhook_data.get('object_attributes', {})
+        last_commit_id = object_attributes.get('last_commit', {}).get('id', '')
+        
+        event_manager['merge_request_reviewed'].send(
+            MergeRequestReviewEntity(
+                project_name=project_name,
+                author=handler.author,
+                source_branch=merge_request.get('source_branch', ''),
+                target_branch=merge_request.get('target_branch', ''),
+                updated_at=int(datetime.now().timestamp()),
+                commits=commits,
+                score=score,
+                url=merge_request.get('web_url', ''),
+                review_result=formatted_result,
+                url_slug=gitlab_url_slug,
+                webhook_data={'object_kind': 'note'},  # 标识来源
+                additions=additions,
+                deletions=deletions,
+                last_commit_id=last_commit_id,
+                gitlab_base_url=gitlab_base_url,
+                project_slug=project_slug,
+            )
+        )
+        
+        logger.info(f"Successfully completed @AI review for MR {handler.mr_iid}")
+        
+    except Exception as e:
+        logger.error(f"Error handling MR note review: {str(e)}")
+        # 向用户反馈错误
+        handler.add_merge_request_comment(f"❌ AI 评审失败: {str(e)}")
 
 
 def handle_merge_request_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gitlab_url_slug: str):
@@ -313,8 +535,8 @@ def handle_merge_request_event(webhook_data: dict, gitlab_token: str, gitlab_url
         code_reviewer = CodeReviewer()
         review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
 
-        # 将review结果提交到Gitlab的 notes
-        handler.add_merge_request_notes(f'Auto Review Result: \n{review_result}')
+        # 将review结果提交到Gitlab的 notes，使用新格式避免包含@AI触发词
+        handler.add_merge_request_notes(f'🤖 AI Code Review Result\n\n{review_result}')
 
         # dispatch merge_request_reviewed event
         event_manager['merge_request_reviewed'].send(
@@ -384,8 +606,8 @@ def handle_github_push_event(webhook_data: dict, github_token: str, github_url: 
                 for item in changes:
                     additions += item.get('additions', 0)
                     deletions += item.get('deletions', 0)
-            # 将review结果提交到GitHub的 notes
-            handler.add_push_notes(f'Auto Review Result: \n{review_result}')
+            # 将review结果提交到GitHub的 notes，使用新格式避免包含@AI触发词
+            handler.add_push_notes(f'🤖 AI Code Review Result\n\n{review_result}')
 
         event_manager['push_reviewed'].send(PushReviewEntity(
             project_name=webhook_data['repository']['name'],
@@ -479,8 +701,8 @@ def handle_github_pull_request_event(webhook_data: dict, github_token: str, gith
         code_reviewer = CodeReviewer()
         review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
 
-        # 将review结果提交到GitHub的 notes
-        handler.add_pull_request_notes(f'Auto Review Result: \n{review_result}')
+        # 将review结果提交到GitHub的 notes，使用新格式避免包含@AI触发词
+        handler.add_pull_request_notes(f'🤖 AI Code Review Result\n\n{review_result}')
 
         # dispatch pull_request_reviewed event
         event_manager['merge_request_reviewed'].send(
@@ -549,7 +771,7 @@ def handle_gitea_push_event(webhook_data: dict, gitea_token: str, gitea_url: str
                 for item in changes:
                     additions += item.get('additions', 0)
                     deletions += item.get('deletions', 0)
-            handler.add_push_notes(f'Auto Review Result: \n{review_result}')
+            handler.add_push_notes(f'🤖 AI Code Review Result\n\n{review_result}')
 
         repository = webhook_data.get('repository', {})
         sender = webhook_data.get('sender', {}) or webhook_data.get('pusher', {}) or {}
@@ -637,7 +859,7 @@ def handle_gitea_pull_request_event(webhook_data: dict, gitea_token: str, gitea_
         code_reviewer = CodeReviewer()
         review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
 
-        handler.add_pull_request_notes(f'Auto Review Result: \n{review_result}')
+        handler.add_pull_request_notes(f'🤖 AI Code Review Result\n\n{review_result}')
 
         repository = webhook_data.get('repository', {})
         author_info = pull_request.get('user', {}) or webhook_data.get('sender', {}) or {}

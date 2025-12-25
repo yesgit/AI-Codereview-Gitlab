@@ -160,13 +160,20 @@ class PullRequestHandler:
             return []
 
     def add_pull_request_notes(self, review_result):
+        """添加 PR 评论文本，使用新格式避免包含 @AI 触发词"""
+        # 如果 review_result 已经包含格式，不再添加
+        if '🤖 AI Code Review Result' in review_result:
+            display_result = review_result
+        else:
+            display_result = f'🤖 AI Code Review Result\n\n{review_result}'
+        
         url = f"https://api.github.com/repos/{self.repo_full_name}/issues/{self.pull_request_number}/comments"
         headers = {
             'Authorization': f'token {self.github_token}',
             'Accept': 'application/vnd.github.v3+json'
         }
         data = {
-            'body': review_result
+            'body': display_result
         }
         response = requests.post(url, headers=headers, json=data)
         logger.debug(f"Add comment to GitHub PR {url}: {response.status_code}, {response.text}")
@@ -247,13 +254,19 @@ class PushHandler:
             logger.error("Last commit ID not found.")
             return
 
+        # 使用新格式避免包含 @AI 触发词
+        if '🤖 AI Code Review Result' in message:
+            display_message = message
+        else:
+            display_message = f'🤖 AI Code Review Result\n\n{message}'
+        
         url = f"https://api.github.com/repos/{self.repo_full_name}/commits/{last_commit_id}/comments"
         headers = {
             'Authorization': f'token {self.github_token}',
             'Accept': 'application/vnd.github.v3+json'
         }
         data = {
-            'body': message
+            'body': display_message
         }
         response = requests.post(url, headers=headers, json=data)
         logger.debug(f"Add comment to commit {last_commit_id}: {response.status_code}, {response.text}")
@@ -367,4 +380,4 @@ class PushHandler:
                         commit_changes = self.repository_compare(parent_id, commit_id)
                         changes.extend(commit_changes)
             
-            return changes 
+            return changes

@@ -166,13 +166,20 @@ class PullRequestHandler:
             return []
 
     def add_pull_request_notes(self, review_result: str):
+        """添加 PR 评论文本，使用新格式避免包含 @AI 触发词"""
         if not self.repo_full_name or not self.pull_request_index:
             logger.error("Missing repository information for adding pull request notes.")
             return
 
+        # 如果 review_result 已经包含格式，不再添加
+        if '🤖 AI Code Review Result' in review_result:
+            display_result = review_result
+        else:
+            display_result = f'🤖 AI Code Review Result\n\n{review_result}'
+
         endpoint = f"api/v1/repos/{self.repo_full_name}/issues/{self.pull_request_index}/comments"
         url = urljoin(f"{self.gitea_url}/", endpoint)
-        response = requests.post(url, headers=self._headers(), json={'body': review_result}, verify=False)
+        response = requests.post(url, headers=self._headers(), json={'body': display_result}, verify=False)
         logger.debug(f"Add comment to Gitea pull request {url}: {response.status_code}, {response.text}")
 
         if response.status_code == 201:
@@ -366,4 +373,3 @@ class PushHandler:
             diff_text = self._get_commit_diff(commit_id)
             changes.extend(self._parse_diff_to_changes(diff_text))
         return changes
-

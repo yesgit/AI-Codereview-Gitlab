@@ -6,6 +6,7 @@ import fnmatch
 import requests
 
 from biz.utils.log import logger
+from biz.gitlab.ai_trigger_utils import contains_ai_trigger, should_skip_ai_note
 
 
 def filter_changes(changes: list):
@@ -191,6 +192,162 @@ class MergeRequestHandler:
         else:
             logger.warn(f"Failed to get protected branches: {response.status_code}, {response.text}")
             return False
+
+
+class NoteHandler:
+    def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str):
+        self.webhook_data = webhook_data
+        self.gitlab_token = gitlab_token
+        self.gitlab_url = gitlab_url
+        self.event_type = None
+        self.note_type = None  # Commit 或 MergeRequest
+        self.note_body = None
+        self.commit_id = None
+        self.mr_iid = None
+        self.project_id = None
+        self.author = None
+        self.parse_event_type()
+
+    def parse_event_type(self):
+        """解析 note 事件"""
+        self.event_type = self.webhook_data.get('object_kind', None)
+        if self.event_type == 'note':
+            self.parse_note_event()
+
+    def parse_note_event(self):
+        """解析 note 事件参数"""
+        object_attributes = self.webhook_data.get('object_attributes', {})
+        self.note_type = object_attributes.get('noteable_type')
+        self.note_body = object_attributes.get('note', '')
+        self.noteable_iid = object_attributes.get('noteable_iid')
+        
+        # 获取评论作者
+        user_info = self.webhook_data.get('user', {})
+        self.author = user_info.get('username', 'Unknown')
+        
+        # 获取项目 ID
+        self.project_id = self.webhook_data.get('project', {}).get('id')
+        
+        # 根据 note_type 设置具体的 ID
+        if self.note_type == 'Commit':
+            self.commit_id = self.noteable_iid
+        elif self.note_type == 'MergeRequest':
+            self.mr_iid = self.noteable_iid
+
+    def get_commit_diff(self) -> list:
+        """获取单个 commit 的 diff"""
+        if not self.commit_id:
+            logger.error("Commit ID not found in note event")
+            return []
+        
+        base = _normalize_base_url(self.gitlab_url)
+        if not base:
+            logger.error("gitlab_url not configured; cannot fetch commit diff")
+            return []
+        
+        url = urljoin(base, f"api/v4/projects/{self.project_id}/repository/commits/{self.commit_id}/diff")
+        headers = {
+            'Private-Token': self.gitlab_token
+        }
+        
+        response = requests.get(url, headers=headers, verify=False)
+        logger.debug(f"Get commit diff response: {response.status_code}, URL: {url}")
+        
+        if response.status_code == 200:
+            diffs = response.json()
+            # 转换格式以兼容 filter_changes
+            changes = []
+            for diff in diffs:
+                changes.append({
+                    'diff': diff.get('diff', ''),
+                    'new_path': diff.get('new_path', diff.get('old_path', '')),
+                    'deleted_file': diff.get('deleted_file', False)
+                })
+            return changes
+        else:
+            logger.warn(f"Failed to get commit diff for {self.commit_id}: {response.status_code}")
+            return []
+
+    def get_merge_request_changes(self) -> list:
+        """获取 MR 的 changes"""
+        if not self.mr_iid or not self.project_id:
+            logger.error("MR IID or project ID not found in note event")
+            return []
+        
+        base = _normalize_base_url(self.gitlab_url)
+        if not base:
+            logger.error("gitlab_url not configured; cannot fetch MR changes")
+            return []
+        
+        url = urljoin(base, f"api/v4/projects/{self.project_id}/merge_requests/{self.mr_iid}/changes?access_raw_diffs=true")
+        headers = {
+            'Private-Token': self.gitlab_token
+        }
+        
+        response = requests.get(url, headers=headers, verify=False)
+        logger.debug(f"Get MR changes response: {response.status_code}, URL: {url}")
+        
+        if response.status_code == 200:
+            return response.json().get('changes', [])
+        else:
+            logger.warn(f"Failed to get MR changes: {response.status_code}")
+            return []
+
+    def add_commit_comment(self, message: str):
+        """在 commit 上添加评论"""
+        if not self.commit_id:
+            logger.error("Commit ID not found, cannot add comment")
+            return
+        
+        base = _normalize_base_url(self.gitlab_url)
+        if not base:
+            logger.error("gitlab_url not configured; cannot add commit comment")
+            return
+        
+        url = urljoin(base, f"api/v4/projects/{self.project_id}/repository/commits/{self.commit_id}/comments")
+        headers = {
+            'Private-Token': self.gitlab_token,
+            'Content-Type': 'application/json'
+        }
+        data = {
+            'note': message
+        }
+        
+        response = requests.post(url, headers=headers, json=data, verify=False)
+        logger.debug(f"Add comment to commit {self.commit_id}: {response.status_code}")
+        if response.status_code == 201:
+            logger.info("Comment successfully added to commit.")
+        else:
+            logger.error(f"Failed to add comment: {response.status_code}")
+            logger.error(response.text)
+
+    def add_merge_request_comment(self, message: str):
+        """在 MR 上添加评论"""
+        if not self.mr_iid or not self.project_id:
+            logger.error("MR IID or project ID not found, cannot add comment")
+            return
+        
+        base = _normalize_base_url(self.gitlab_url)
+        if not base:
+            logger.error("gitlab_url not configured; cannot add MR comment")
+            return
+        
+        url = urljoin(base, f"api/v4/projects/{self.project_id}/merge_requests/{self.mr_iid}/notes")
+        headers = {
+            'Private-Token': self.gitlab_token,
+            'Content-Type': 'application/json'
+        }
+        data = {
+            'body': message
+        }
+        
+        response = requests.post(url, headers=headers, json=data, verify=False)
+        logger.debug(f"Add comment to MR {self.mr_iid}: {response.status_code}")
+        if response.status_code == 201:
+            logger.info("Comment successfully added to merge request.")
+        else:
+            logger.error(f"Failed to add comment: {response.status_code}")
+            logger.error(response.text)
 
 
 class PushHandler:
