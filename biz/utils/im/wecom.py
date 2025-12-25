@@ -8,11 +8,20 @@ from biz.service.webhook_service import WebhookService
 
 
 class WeComNotifier:
-    def __init__(self, webhook_url=None):
+    def __init__(self, config=None):
         """初始化企业微信通知器
-        :param webhook_url: 企业微信机器人 webhook 地址"""
-        self.default_webhook_url = webhook_url or os.environ.get('WECOM_WEBHOOK_URL', '')
+        :param config: 企业微信机器人 webhook 地址或配置字典"""
+        self.default_webhook_url = ''
         self.enabled = os.environ.get('WECOM_ENABLED', '0') == '1'
+        self.config = config or {}
+        
+        # 支持传入 webhook_url 或 config 字典
+        if isinstance(config, str):
+            self.default_webhook_url = config
+        elif config and isinstance(config, dict):
+            self.default_webhook_url = config.get('wecom_webhook') or config.get('wecom_url', '')
+        else:
+            self.default_webhook_url = os.environ.get('WECOM_WEBHOOK_URL', '')
 
     def _get_webhook_url(self, gitlab_base_url=None, project_slug=None, branch_name=None,
                         project_name=None, url_slug=None):
@@ -27,6 +36,14 @@ class WeComNotifier:
             url_slug: URL slug（兼容旧方式）
         """
         try:
+            # 优先使用构造函数传入的配置
+            if self.config and self.config.get('wecom_enabled') is not None:
+                if not self.config.get('wecom_enabled'):
+                    logger.info("企业微信通知已禁用（配置级别）")
+                    return None
+                if self.config.get('wecom_webhook') or self.config.get('wecom_url'):
+                    return self.config.get('wecom_webhook') or self.config.get('wecom_url')
+            
             # 使用统一的配置获取方法，支持三级回退
             config = WebhookService.get_webhook_config_with_fallback(
                 gitlab_base_url=gitlab_base_url,
@@ -35,6 +52,12 @@ class WeComNotifier:
                 project_name=project_name,
                 url_slug=url_slug
             )
+            
+            # 检查是否启用企业微信通知
+            if config and config.get('wecom_enabled') is not None:
+                if not config.get('wecom_enabled'):
+                    logger.info("企业微信通知已禁用（配置级别）")
+                    return None
             
             # 从配置中获取企业微信URL
             if config and config.get('wecom_url'):
@@ -84,9 +107,6 @@ class WeComNotifier:
     def send_message(self, content, msg_type='text', title=None, is_at_all=False,
                      gitlab_base_url=None, project_slug=None, branch_name=None,
                      project_name=None, url_slug=None):
-        if not self.enabled:
-            logger.info("企业微信推送未启用")
-            return
         try:
             post_url = self._get_webhook_url(
                 gitlab_base_url=gitlab_base_url,
@@ -95,6 +115,11 @@ class WeComNotifier:
                 project_name=project_name,
                 url_slug=url_slug
             )
+            
+            # 如果 webhook URL 为 None（已禁用），直接返回
+            if post_url is None:
+                return
+
             MAX_CONTENT_BYTES = 4096 if msg_type == 'markdown' else 2048
             content_length = len(content.encode('utf-8'))
             if content_length <= MAX_CONTENT_BYTES:

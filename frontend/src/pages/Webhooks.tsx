@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Popconfirm } from 'antd';
+import { Table, Button, Modal, Form, Input, message, Popconfirm, Switch } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { webhookApi } from '@/api/webhooks';
 import type { Webhook, WebhookForm } from '@/types';
@@ -106,6 +106,15 @@ const Webhooks: React.FC = () => {
       ellipsis: true,
     },
     { 
+      title: '钉钉启用', 
+      dataIndex: 'dingtalk_enabled', 
+      key: 'dingtalk_enabled',
+      width: 80,
+      render: (enabled: boolean) => (
+        <Switch checked={enabled} disabled size="small" />
+      ),
+    },
+    { 
       title: '飞书 Webhook', 
       dataIndex: 'feishu_url', 
       key: 'feishu_url',
@@ -113,11 +122,29 @@ const Webhooks: React.FC = () => {
       ellipsis: true,
     },
     { 
+      title: '飞书启用', 
+      dataIndex: 'feishu_enabled', 
+      key: 'feishu_enabled',
+      width: 80,
+      render: (enabled: boolean) => (
+        <Switch checked={enabled} disabled size="small" />
+      ),
+    },
+    { 
       title: '企业微信 Webhook', 
       dataIndex: 'wecom_url', 
       key: 'wecom_url',
       width: 120,
       ellipsis: true,
+    },
+    { 
+      title: '企业微信启用', 
+      dataIndex: 'wecom_enabled', 
+      key: 'wecom_enabled',
+      width: 90,
+      render: (enabled: boolean) => (
+        <Switch checked={enabled} disabled size="small" />
+      ),
     },
     {
       title: '操作',
@@ -219,6 +246,7 @@ const Webhooks: React.FC = () => {
             label="项目名称"
             name="project_name"
             tooltip="兼容旧方式，建议使用上面的 GitLab URL + Slug"
+            rules={[{ required: true, message: '请输入项目名称' }]}
           >
             <Input placeholder="项目名称" />
           </Form.Item>
@@ -235,12 +263,39 @@ const Webhooks: React.FC = () => {
             <Input.TextArea rows={2} placeholder="钉钉机器人 Webhook URL" />
           </Form.Item>
 
+          <Form.Item 
+            label="启用钉钉通知" 
+            name="dingtalk_enabled" 
+            valuePropName="checked"
+            tooltip="开启后将发送钉钉通知"
+          >
+            <Switch />
+          </Form.Item>
+
           <Form.Item label="飞书 Webhook URL" name="feishu_url">
             <Input.TextArea rows={2} placeholder="飞书机器人 Webhook URL" />
           </Form.Item>
 
+          <Form.Item 
+            label="启用飞书通知" 
+            name="feishu_enabled" 
+            valuePropName="checked"
+            tooltip="开启后将发送飞书通知"
+          >
+            <Switch />
+          </Form.Item>
+
           <Form.Item label="企业微信 Webhook URL" name="wecom_url">
             <Input.TextArea rows={2} placeholder="企业微信机器人 Webhook URL" />
+          </Form.Item>
+
+          <Form.Item 
+            label="启用企业微信通知" 
+            name="wecom_enabled" 
+            valuePropName="checked"
+            tooltip="开启后将发送企业微信通知"
+          >
+            <Switch />
           </Form.Item>
 
           <Form.Item label="自定义系统 Prompt" name="custom_prompt_system">

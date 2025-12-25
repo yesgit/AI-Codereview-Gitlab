@@ -15,10 +15,19 @@ from biz.service.webhook_service import WebhookService
 class DingTalkNotifier:
     """干净的钉钉机器人通知器实现，支持 URL 掩码与可选签名。"""
 
-    def __init__(self, webhook_url: Optional[str] = None):
-        self.default_webhook_url = webhook_url or os.environ.get('DINGTALK_WEBHOOK_URL', '')
+    def __init__(self, config=None):
+        self.default_webhook_url = ''
         self.enabled = os.environ.get('DINGTALK_ENABLED', '0') == '1'
         self.secret = os.environ.get('DINGTALK_SECRET')
+        self.config = config or {}
+        
+        # 支持传入 webhook_url 或 config 字典
+        if isinstance(config, str):
+            self.default_webhook_url = config
+        elif config and isinstance(config, dict):
+            self.default_webhook_url = config.get('dingtalk_webhook') or config.get('dingtalk_url', '')
+        else:
+            self.default_webhook_url = os.environ.get('DINGTALK_WEBHOOK_URL', '')
 
     def _get_webhook_url(self, gitlab_base_url: Optional[str] = None, project_slug: Optional[str] = None,
                         branch_name: Optional[str] = None, project_name: Optional[str] = None, 
@@ -34,6 +43,14 @@ class DingTalkNotifier:
             url_slug: URL slug（兼容旧方式）
         """
         try:
+            # 优先使用构造函数传入的配置
+            if self.config and self.config.get('dingtalk_enabled') is not None:
+                if not self.config.get('dingtalk_enabled'):
+                    logger.info("钉钉通知已禁用（配置级别）")
+                    return None
+                if self.config.get('dingtalk_webhook') or self.config.get('dingtalk_url'):
+                    return self.config.get('dingtalk_webhook') or self.config.get('dingtalk_url')
+            
             # 使用统一的配置获取方法，支持三级回退
             config = WebhookService.get_webhook_config_with_fallback(
                 gitlab_base_url=gitlab_base_url,
@@ -42,6 +59,12 @@ class DingTalkNotifier:
                 project_name=project_name,
                 url_slug=url_slug
             )
+            
+            # 检查是否启用钉钉通知
+            if config and config.get('dingtalk_enabled') is not None:
+                if not config.get('dingtalk_enabled'):
+                    logger.info("钉钉通知已禁用（配置级别）")
+                    return None
             
             # 从配置中获取钉钉URL
             if config and config.get('dingtalk_url'):
@@ -99,9 +122,6 @@ class DingTalkNotifier:
                      gitlab_base_url: Optional[str] = None, project_slug: Optional[str] = None,
                      branch_name: Optional[str] = None, project_name: Optional[str] = None, 
                      url_slug: Optional[str] = None):
-        if not self.enabled:
-            logger.info("钉钉推送未启用")
-            return
         try:
             post_url = self._get_webhook_url(
                 gitlab_base_url=gitlab_base_url,
@@ -110,6 +130,11 @@ class DingTalkNotifier:
                 project_name=project_name,
                 url_slug=url_slug
             )
+            
+            # 如果 webhook URL 为 None（已禁用），直接返回
+            if post_url is None:
+                return
+            
             post_url = self._sign_url(post_url)
 
             headers = {"Content-Type": "application/json; charset=utf-8"}

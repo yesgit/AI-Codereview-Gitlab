@@ -24,6 +24,9 @@ export interface Webhook {
   dingtalk_url?: string;
   feishu_url?: string;
   wecom_url?: string;
+  dingtalk_enabled?: boolean;
+  feishu_enabled?: boolean;
+  wecom_enabled?: boolean;
   custom_prompt_system?: string;
   custom_prompt_user?: string;
   gitlab_token?: string;
@@ -39,6 +42,9 @@ export interface WebhookForm {
   dingtalk_url?: string;
   feishu_url?: string;
   wecom_url?: string;
+  dingtalk_enabled?: boolean;
+  feishu_enabled?: boolean;
+  wecom_enabled?: boolean;
   custom_prompt_system?: string;
   custom_prompt_user?: string;
   gitlab_token?: string;
@@ -52,6 +58,9 @@ export interface BranchWebhook {
   dingtalk_url?: string;
   feishu_url?: string;
   wecom_url?: string;
+  dingtalk_enabled?: boolean;
+  feishu_enabled?: boolean;
+  wecom_enabled?: boolean;
   custom_prompt_system?: string;
   custom_prompt_user?: string;
   gitlab_token?: string;
@@ -66,6 +75,9 @@ export interface BranchWebhookForm {
   dingtalk_url?: string;
   feishu_url?: string;
   wecom_url?: string;
+  dingtalk_enabled?: boolean;
+  feishu_enabled?: boolean;
+  wecom_enabled?: boolean;
   custom_prompt_system?: string;
   custom_prompt_user?: string;
   gitlab_token?: string;

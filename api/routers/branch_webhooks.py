@@ -19,6 +19,9 @@ class BranchWebhookCreate(BaseModel):
     dingtalk_url: Optional[str] = None
     feishu_url: Optional[str] = None
     wecom_url: Optional[str] = None
+    dingtalk_enabled: Optional[bool] = None
+    feishu_enabled: Optional[bool] = None
+    wecom_enabled: Optional[bool] = None
     custom_prompt_system: Optional[str] = None
     custom_prompt_user: Optional[str] = None
     gitlab_token: Optional[str] = None
@@ -31,6 +34,9 @@ class BranchWebhookUpdate(BaseModel):
     dingtalk_url: Optional[str] = None
     feishu_url: Optional[str] = None
     wecom_url: Optional[str] = None
+    dingtalk_enabled: Optional[bool] = None
+    feishu_enabled: Optional[bool] = None
+    wecom_enabled: Optional[bool] = None
     custom_prompt_system: Optional[str] = None
     custom_prompt_user: Optional[str] = None
     gitlab_token: Optional[str] = None
@@ -44,6 +50,9 @@ class BranchWebhookResponse(BaseModel):
     dingtalk_url: Optional[str] = None
     feishu_url: Optional[str] = None
     wecom_url: Optional[str] = None
+    dingtalk_enabled: Optional[bool] = None
+    feishu_enabled: Optional[bool] = None
+    wecom_enabled: Optional[bool] = None
     custom_prompt_system: Optional[str] = None
     custom_prompt_user: Optional[str] = None
     gitlab_token: Optional[str] = None
@@ -92,6 +101,9 @@ async def create_branch_webhook(webhook: BranchWebhookCreate, current_user: str 
         dingtalk_url=webhook.dingtalk_url,
         feishu_url=webhook.feishu_url,
         wecom_url=webhook.wecom_url,
+        dingtalk_enabled=webhook.dingtalk_enabled,
+        feishu_enabled=webhook.feishu_enabled,
+        wecom_enabled=webhook.wecom_enabled,
         custom_prompt_system=webhook.custom_prompt_system,
         custom_prompt_user=webhook.custom_prompt_user,
         gitlab_token=webhook.gitlab_token
@@ -147,6 +159,9 @@ async def update_branch_webhook(config_id: int, webhook: BranchWebhookUpdate, cu
         dingtalk_url=webhook.dingtalk_url,
         feishu_url=webhook.feishu_url,
         wecom_url=webhook.wecom_url,
+        dingtalk_enabled=webhook.dingtalk_enabled,
+        feishu_enabled=webhook.feishu_enabled,
+        wecom_enabled=webhook.wecom_enabled,
         custom_prompt_system=webhook.custom_prompt_system,
         custom_prompt_user=webhook.custom_prompt_user,
         gitlab_token=webhook.gitlab_token

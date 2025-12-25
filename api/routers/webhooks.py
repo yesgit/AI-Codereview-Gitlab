@@ -20,6 +20,9 @@ class WebhookCreate(BaseModel):
     dingtalk_url: Optional[str] = None
     feishu_url: Optional[str] = None
     wecom_url: Optional[str] = None
+    dingtalk_enabled: Optional[bool] = None
+    feishu_enabled: Optional[bool] = None
+    wecom_enabled: Optional[bool] = None
     custom_prompt_system: Optional[str] = None
     custom_prompt_user: Optional[str] = None
     gitlab_token: Optional[str] = None
@@ -33,6 +36,9 @@ class WebhookUpdate(BaseModel):
     dingtalk_url: Optional[str] = None
     feishu_url: Optional[str] = None
     wecom_url: Optional[str] = None
+    dingtalk_enabled: Optional[bool] = None
+    feishu_enabled: Optional[bool] = None
+    wecom_enabled: Optional[bool] = None
     custom_prompt_system: Optional[str] = None
     custom_prompt_user: Optional[str] = None
     gitlab_token: Optional[str] = None
@@ -47,6 +53,9 @@ class WebhookResponse(BaseModel):
     dingtalk_url: Optional[str] = None
     feishu_url: Optional[str] = None
     wecom_url: Optional[str] = None
+    dingtalk_enabled: Optional[bool] = None
+    feishu_enabled: Optional[bool] = None
+    wecom_enabled: Optional[bool] = None
     custom_prompt_system: Optional[str] = None
     custom_prompt_user: Optional[str] = None
     gitlab_token: Optional[str] = None
@@ -64,11 +73,11 @@ async def get_all_webhooks(current_user: str = Depends(get_current_user)):
 @router.post("", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)
 async def create_webhook(webhook: WebhookCreate, current_user: str = Depends(get_current_user)):
     """创建项目配置"""
-    # 基本校验
-    if not webhook.gitlab_base_url and not webhook.project_slug and not webhook.project_name and not webhook.url_slug:
+    # 基本校验：项目名称必须填写
+    if not webhook.project_name or not webhook.project_name.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请至少填写以下之一：gitlab_base_url + project_slug、project_name 或 url_slug"
+            detail="项目名称不能为空"
         )
     
     if (webhook.gitlab_base_url and not webhook.project_slug) or (not webhook.gitlab_base_url and webhook.project_slug):
@@ -113,6 +122,9 @@ async def create_webhook(webhook: WebhookCreate, current_user: str = Depends(get
         dingtalk_url=webhook.dingtalk_url,
         feishu_url=webhook.feishu_url,
         wecom_url=webhook.wecom_url,
+        dingtalk_enabled=webhook.dingtalk_enabled,
+        feishu_enabled=webhook.feishu_enabled,
+        wecom_enabled=webhook.wecom_enabled,
         custom_prompt_system=webhook.custom_prompt_system,
         custom_prompt_user=webhook.custom_prompt_user,
         gitlab_token=webhook.gitlab_token
@@ -159,6 +171,9 @@ async def update_webhook(webhook_id: int, webhook: WebhookUpdate, current_user: 
         dingtalk_url=webhook.dingtalk_url,
         feishu_url=webhook.feishu_url,
         wecom_url=webhook.wecom_url,
+        dingtalk_enabled=webhook.dingtalk_enabled,
+        feishu_enabled=webhook.feishu_enabled,
+        wecom_enabled=webhook.wecom_enabled,
         custom_prompt_system=webhook.custom_prompt_system,
         custom_prompt_user=webhook.custom_prompt_user,
         gitlab_token=webhook.gitlab_token

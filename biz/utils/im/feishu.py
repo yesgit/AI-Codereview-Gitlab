@@ -7,13 +7,22 @@ from biz.service.webhook_service import WebhookService
 
 
 class FeishuNotifier:
-    def __init__(self, webhook_url=None):
+    def __init__(self, config=None):
         """
         初始化飞书通知器
-        :param webhook_url: 飞书机器人webhook地址
+        :param config: 飞书机器人webhook地址或配置字典
         """
-        self.default_webhook_url = webhook_url or os.environ.get('FEISHU_WEBHOOK_URL', '')
+        self.default_webhook_url = ''
         self.enabled = os.environ.get('FEISHU_ENABLED', '0') == '1'
+        self.config = config or {}
+        
+        # 支持传入 webhook_url 或 config 字典
+        if isinstance(config, str):
+            self.default_webhook_url = config
+        elif config and isinstance(config, dict):
+            self.default_webhook_url = config.get('feishu_webhook') or config.get('feishu_url', '')
+        else:
+            self.default_webhook_url = os.environ.get('FEISHU_WEBHOOK_URL', '')
 
     def _get_webhook_url(self, gitlab_base_url=None, project_slug=None, branch_name=None,
                         project_name=None, url_slug=None):
@@ -28,6 +37,14 @@ class FeishuNotifier:
             url_slug: URL slug（兼容旧方式）
         """
         try:
+            # 优先使用构造函数传入的配置
+            if self.config and self.config.get('feishu_enabled') is not None:
+                if not self.config.get('feishu_enabled'):
+                    logger.info("飞书通知已禁用（配置级别）")
+                    return None
+                if self.config.get('feishu_webhook') or self.config.get('feishu_url'):
+                    return self.config.get('feishu_webhook') or self.config.get('feishu_url')
+            
             # 使用统一的配置获取方法，支持三级回退
             config = WebhookService.get_webhook_config_with_fallback(
                 gitlab_base_url=gitlab_base_url,
@@ -36,6 +53,12 @@ class FeishuNotifier:
                 project_name=project_name,
                 url_slug=url_slug
             )
+            
+            # 检查是否启用飞书通知
+            if config and config.get('feishu_enabled') is not None:
+                if not config.get('feishu_enabled'):
+                    logger.info("飞书通知已禁用（配置级别）")
+                    return None
             
             # 从配置中获取飞书URL
             if config and config.get('feishu_url'):
@@ -91,11 +114,6 @@ class FeishuNotifier:
             project_name: 项目名称（兼容旧方式）
             url_slug: URL slug（兼容旧方式）
         """
-        # 如果未启用且没有手动传入 webhook_url，则直接返回
-        if not self.enabled and not self.default_webhook_url:
-            logger.info("飞书推送未启用")
-            return
-
         try:
             post_url = self._get_webhook_url(
                 gitlab_base_url=gitlab_base_url,
@@ -104,6 +122,11 @@ class FeishuNotifier:
                 project_name=project_name,
                 url_slug=url_slug
             )
+            
+            # 如果 webhook URL 为 None（已禁用），直接返回
+            if post_url is None:
+                return
+
             if msg_type == 'markdown':
                 # 构建结构化的飞书卡片，避免 Markdown 解析问题
                 data = {
