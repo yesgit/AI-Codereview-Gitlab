@@ -3,7 +3,7 @@
 """
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 import fnmatch
 
@@ -132,9 +132,9 @@ def daily_report_task():
     """
     日报任务函数，供调度器调用
     """
-    # 获取当前日期0点和23点59分59秒的时间戳
-    start_time = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-    end_time = datetime.now().replace(hour=23, minute=59, second=59, microsecond=0).timestamp()
+    # 获取当前日期0点和23点59分59秒的时间戳（使用 UTC 时间）
+    start_time = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    end_time = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59, microsecond=0).timestamp()
 
     try:
         # 获取当日所有审查日志
@@ -246,9 +246,9 @@ def daily_report():
     """
     日报路由处理函数
     """
-    # 获取当前日期0点和23点59分59秒的时间戳
-    start_time = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-    end_time = datetime.now().replace(hour=23, minute=59, second=59, microsecond=0).timestamp()
+    # 获取当前日期0点和23点59分59秒的时间戳（使用 UTC 时间）
+    start_time = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    end_time = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59, microsecond=0).timestamp()
 
     try:
         # 获取当日所有审查日志

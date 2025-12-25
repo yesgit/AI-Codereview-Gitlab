@@ -46,10 +46,10 @@ async def get_mr_reviews(
         updated_at_lte=updated_at_lte
     )
     
-    # 将 datetime 转换为可读格式
+    # 将 datetime 转换为可读格式（使用 UTC 时间）
     if not df.empty and 'updated_at' in df.columns:
         df['updated_at'] = df['updated_at'].apply(
-            lambda ts: datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+            lambda ts: datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
             if isinstance(ts, (int, float)) else ts
         )
     
@@ -76,10 +76,10 @@ async def get_push_reviews(
         updated_at_lte=updated_at_lte
     )
     
-    # 将 datetime 转换为可读格式
+    # 将 datetime 转换为可读格式（使用 UTC 时间）
     if not df.empty and 'updated_at' in df.columns:
         df['updated_at'] = df['updated_at'].apply(
-            lambda ts: datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+            lambda ts: datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
             if isinstance(ts, (int, float)) else ts
         )
     
