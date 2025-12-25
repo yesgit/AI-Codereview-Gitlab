@@ -49,12 +49,16 @@ if [ $tries -eq $max_tries ]; then
 fi
 echo "✅ Redis is ready!"
 
-# 执行数据库迁移
-echo "📦 Running database migrations..."
-if alembic upgrade head; then
-    echo "✅ Database migrations completed successfully!"
+# 执行数据库迁移（除非设置了 SKIP_DB_MIGRATION）
+if [ "$SKIP_DB_MIGRATION" != "true" ]; then
+    echo "📦 Running database migrations..."
+    if alembic upgrade head; then
+        echo "✅ Database migrations completed successfully!"
+    else
+        echo "⚠️  Database migrations failed, but continuing..."
+    fi
 else
-    echo "⚠️  Database migrations failed, but continuing..."
+    echo "⏭️  Skipping database migrations (SKIP_DB_MIGRATION=true)"
 fi
 
 # 启动应用
