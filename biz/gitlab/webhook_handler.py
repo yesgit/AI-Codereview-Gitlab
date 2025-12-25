@@ -232,6 +232,14 @@ class NoteHandler:
         if self.note_type == 'Commit':
             # 对于 commit，优先使用 commit_id 字段，如果不存在则使用 noteable_iid
             self.commit_id = object_attributes.get('commit_id') or self.noteable_iid
+            
+            # 获取真正的 commit 作者（从 webhook payload 中的 commit 字段）
+            commit_info = self.webhook_data.get('commit', {})
+            if commit_info and commit_info.get('author'):
+                self.commit_author = commit_info.get('author', {}).get('name', 'Unknown')
+            else:
+                # 如果 payload 中没有 commit 作者信息，回退到评论者
+                self.commit_author = self.author
         elif self.note_type == 'MergeRequest':
             self.mr_iid = self.noteable_iid
 

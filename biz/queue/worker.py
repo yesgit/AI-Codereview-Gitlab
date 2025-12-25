@@ -317,9 +317,9 @@ def _handle_commit_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slu
             additions += item.get('additions', 0)
             deletions += item.get('deletions', 0)
         
-        # 获取 commit 信息（从 webhook_data 或通过 API）
+        # 获取 commit 信息（使用真正的 commit 作者，而不是评论者）
         commit_message = "Review triggered by @AI comment"
-        commit_author = handler.author
+        commit_author = getattr(handler, 'commit_author', handler.author)
         
         # 执行代码评审
         code_reviewer = CodeReviewer()
@@ -338,7 +338,7 @@ def _handle_commit_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slu
         # 发送 push_reviewed 事件（复用现有表记录）
         event_manager['push_reviewed'].send(PushReviewEntity(
             project_name=project_name,
-            author=handler.author,
+            author=commit_author,  # 使用真正的 commit 作者
             branch="N/A",  # commit 评审没有分支信息
             updated_at=int(datetime.now().timestamp()),
             commits=[{
@@ -350,6 +350,8 @@ def _handle_commit_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slu
             review_result=formatted_result,
             url_slug=gitlab_url_slug,
             webhook_data={'object_kind': 'note'},  # 标识来源
+            # 添加评论者信息用于追踪
+            comment_author=handler.author,
             additions=additions,
             deletions=deletions,
             gitlab_base_url=gitlab_base_url,
