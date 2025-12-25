@@ -1,13 +1,17 @@
 """
 FastAPI 主应用入口
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from biz.utils.db import init_db
+from biz.utils.log import logger
+from biz.api.routes.daily_report import daily_report_task
 
 from api.routers import auth, webhooks, branch_webhooks, reviews, webhook_handler
 
@@ -16,6 +20,10 @@ from api.routers import auth, webhooks, branch_webhooks, reviews, webhook_handle
 async def lifespan(app: FastAPI):
     # 启动时初始化数据库
     init_db()
+    
+    # 启动日报定时任务调度器
+    setup_daily_report_scheduler()
+    
     yield
     # 关闭时的清理工作
 
@@ -37,11 +45,30 @@ app.add_middleware(
 )
 
 # 注册路由（按注册顺序，精确路由优先）
+# 必须在通配符路由之前注册精确路由
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
 app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["项目配置"])
 app.include_router(branch_webhooks.router, prefix="/api/v1/branch-webhooks", tags=["分支配置"])
 app.include_router(reviews.router, prefix="/api/v1/reviews", tags=["查询统计"])
 app.include_router(webhook_handler.router, prefix="", tags=["Webhook事件"])  # /review/webhook
+
+# 日报路由必须在 serve_spa 之前注册
+
+# 日报路由（必须在 serve_spa 之前注册以避免被通配符捕获）
+@app.get("/review/daily_report", tags=["日报"])
+async def trigger_daily_report():
+    """
+    手动触发日报任务
+    """
+    try:
+        daily_report_task()
+        return {"message": "Daily report generated and sent successfully."}
+    except Exception as e:
+        logger.error(f"Failed to generate daily report: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to generate daily report: {e}")
+
 
 # Serve frontend static files if built
 if os.path.exists("/app/frontend/dist"):
@@ -89,6 +116,39 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+def setup_daily_report_scheduler():
+    """
+    配置并启动日报定时任务调度器
+    """
+    try:
+        scheduler = BackgroundScheduler()
+        crontab_expression = os.getenv('REPORT_CRONTAB_EXPRESSION', '0 18 * * 1-5')
+        cron_parts = crontab_expression.split()
+        cron_minute, cron_hour, cron_day, cron_month, cron_day_of_week = cron_parts
+
+        # Schedule the task based on the crontab expression
+        scheduler.add_job(
+            daily_report_task,
+            trigger=CronTrigger(
+                minute=cron_minute,
+                hour=cron_hour,
+                day=cron_day,
+                month=cron_month,
+                day_of_week=cron_day_of_week
+            )
+        )
+
+        # Start the scheduler
+        scheduler.start()
+        logger.info(f"Scheduler started successfully with cron expression: {crontab_expression}")
+        return scheduler
+    except Exception as e:
+        logger.error(f"Error setting up scheduler: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
 
 
 if __name__ == "__main__":
