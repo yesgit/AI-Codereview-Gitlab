@@ -230,7 +230,8 @@ class NoteHandler:
         
         # 根据 note_type 设置具体的 ID
         if self.note_type == 'Commit':
-            self.commit_id = self.noteable_iid
+            # 对于 commit，优先使用 commit_id 字段，如果不存在则使用 noteable_iid
+            self.commit_id = object_attributes.get('commit_id') or self.noteable_iid
         elif self.note_type == 'MergeRequest':
             self.mr_iid = self.noteable_iid
 
