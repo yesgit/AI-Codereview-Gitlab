@@ -27,5 +27,5 @@ export const reviewsApi = {
     request.get<StatsResponse>('/reviews/stats', { params }),
 
   sendDailyReport: () => 
-    request.get<{ message: string }>('/review/daily_report'),
+    request.get<{ message: string }>('/review/daily_report', { baseURL: '' }),
 };

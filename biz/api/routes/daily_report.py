@@ -106,7 +106,7 @@ def send_report_to_config(logs: List[dict], config: dict, title_prefix: str = No
     
     # 发送通知到所有配置的IM平台
     if config.get('dingtalk_url'):
-        dt_notifier = DingTalkNotifier(webhook_url=config['dingtalk_url'])
+        dt_notifier = DingTalkNotifier(config=config)
         dt_notifier.send_message(
             content=report_txt, 
             msg_type="markdown", 
@@ -132,9 +132,17 @@ def daily_report_task():
     """
     日报任务函数，供调度器调用
     """
+    logger.info("=" * 80)
+    logger.info("🚀 开始处理日报请求（调度或手动触发）")
+    logger.info("=" * 80)
+    
     # 获取当前日期0点和23点59分59秒的时间戳（使用 UTC 时间）
     start_time = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
     end_time = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59, microsecond=0).timestamp()
+    
+    logger.info(f"📋 时间范围: {datetime.fromtimestamp(start_time, tz=timezone.utc)} ~ {datetime.fromtimestamp(end_time, tz=timezone.utc)}")
+    logger.info(f"📋 时间戳范围: {start_time} ~ {end_time}")
+    logger.info(f"📋 Push Review 启用状态: {push_review_enabled}")
 
     try:
         # 获取当日所有审查日志
@@ -256,20 +264,39 @@ def daily_report():
     """
     日报路由处理函数
     """
+    logger.info("=" * 80)
+    logger.info("🚀 开始处理手动日报请求")
+    logger.info("=" * 80)
+    
     # 获取当前日期0点和23点59分59秒的时间戳（使用 UTC 时间）
     start_time = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
     end_time = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59, microsecond=0).timestamp()
+    
+    logger.info(f"📋 时间范围: {datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')} 到 {datetime.fromtimestamp(end_time).strftime('%Y-%m-%d %H:%M:%S')} (UTC)")
+    logger.info(f"📋 时间戳范围: {start_time} 到 {end_time}")
+    logger.info(f"📋 当前时间: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} (UTC)")
+    logger.info(f"📋 当前本地时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"📋 Push Review 启用状态: {push_review_enabled}")
 
     try:
+        logger.info(f"🔍 开始查询审查日志...")
         # 获取当日所有审查日志
         if push_review_enabled:
+            logger.info(f"🔍 查询 Push Review 日志")
             df = ReviewService().get_push_review_logs(updated_at_gte=start_time, updated_at_lte=end_time)
         else:
+            logger.info(f"🔍 查询 MR Review 日志")
             df = ReviewService().get_mr_review_logs(updated_at_gte=start_time, updated_at_lte=end_time)
 
+        logger.info(f"🔍 查询完成，共 {len(df)} 条记录")
+        
         if df.empty:
-            logger.info("No data to process.")
+            logger.info("⚠️ 没有数据，发送空数据响应")
             return jsonify({'message': 'No data to process.'}), 200
+        
+        logger.info(f"📊 数据预览（前5条）:")
+        for idx, row in df.head().iterrows():
+            logger.info(f"   - {row.get('project_name')}/{row.get('author')}: {row.get('commit_messages')[:50]}...")
 
         # 转换为字典列表
         logs = df.to_dict(orient="records")
