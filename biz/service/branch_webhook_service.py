@@ -182,6 +182,10 @@ class BranchWebhookService:
             project_slug: 可选，按项目过滤
         """
         try:
+            # 规范化 URL（去除尾随斜杠）
+            if gitlab_base_url:
+                gitlab_base_url = gitlab_base_url.rstrip('/')
+            
             engine = get_engine()
             
             where_clauses = []
@@ -232,6 +236,9 @@ class BranchWebhookService:
             匹配到的配置字典，如果没有匹配则返回 None
         """
         try:
+            # 规范化 URL（去除尾随斜杠）
+            gitlab_base_url = gitlab_base_url.rstrip('/')
+            
             # 获取该项目的所有分支配置
             all_configs = BranchWebhookService.get_all_branch_webhooks(gitlab_base_url, project_slug)
             

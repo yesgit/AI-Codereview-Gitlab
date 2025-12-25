@@ -224,6 +224,9 @@ class WebhookService:
             project_slug: 项目slug，如 mygroup/myproject
         """
         try:
+            # 规范化 URL（去除尾随斜杠）
+            gitlab_base_url = gitlab_base_url.rstrip('/')
+            
             engine = get_engine()
             sql = text('''SELECT id, project_name, url_slug, gitlab_base_url, project_slug,
                                 dingtalk_url, feishu_url, wecom_url,
@@ -305,6 +308,10 @@ class WebhookService:
             dict: 合并后的配置字典（可能来自多个层级）
         """
         result_config = {}
+        
+        # 规范化 gitlab_base_url（去除尾随斜杠）
+        if gitlab_base_url:
+            gitlab_base_url = gitlab_base_url.rstrip('/')
         
         # 收集所有层级的配置
         branch_config = None
