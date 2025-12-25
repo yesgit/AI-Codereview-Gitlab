@@ -410,6 +410,12 @@ def _handle_mr_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slug,
                     merge_request = response.json()
         
         commits = merge_request.get('commits', []) or []
+        
+        # 获取 MR 作者（如果存在）
+        mr_author = getattr(handler, 'mr_author', None)
+        if not mr_author and merge_request:
+            mr_author = merge_request.get('author', {}).get('username', handler.author)
+        
         if not commits:
             logger.warn(f"MR {handler.mr_iid} has no commits.")
             commits = [{'title': 'Review triggered by @AI comment'}]
@@ -433,10 +439,13 @@ def _handle_mr_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slug,
         object_attributes = webhook_data.get('object_attributes', {})
         last_commit_id = object_attributes.get('last_commit', {}).get('id', '')
         
+        # 使用 MR 作者而不是评论者
+        author = mr_author or handler.author
+        
         event_manager['merge_request_reviewed'].send(
             MergeRequestReviewEntity(
                 project_name=project_name,
-                author=handler.author,
+                author=author,  # 使用 MR 作者
                 source_branch=merge_request.get('source_branch', ''),
                 target_branch=merge_request.get('target_branch', ''),
                 updated_at=int(datetime.now().timestamp()),
@@ -446,6 +455,8 @@ def _handle_mr_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slug,
                 review_result=formatted_result,
                 url_slug=gitlab_url_slug,
                 webhook_data={'object_kind': 'note'},  # 标识来源
+                # 添加评论者信息用于追踪
+                comment_author=handler.author,
                 additions=additions,
                 deletions=deletions,
                 last_commit_id=last_commit_id,
