@@ -21,15 +21,15 @@ class TestRetryableError(unittest.TestCase):
 
     def test_openai_timeout_error(self):
         """测试 OpenAI 超时错误"""
-        with patch('openai') as mock_openai:
-            error = mock_openai.APITimeoutError("Request timed out")
-            self.assertTrue(is_retryable_error(error))
+        from openai import APITimeoutError
+        error = APITimeoutError("Request timed out")
+        self.assertTrue(is_retryable_error(error))
 
     def test_httpx_read_timeout(self):
         """测试 HTTPx 读取超时"""
-        with patch('httpx') as mock_httpx:
-            error = mock_httpx.ReadTimeout("timed out")
-            self.assertTrue(is_retryable_error(error))
+        from httpx import ReadTimeout
+        error = ReadTimeout("timed out")
+        self.assertTrue(is_retryable_error(error))
 
     def test_connection_error(self):
         """测试连接错误"""
@@ -168,9 +168,9 @@ class TestHandleRetry(unittest.TestCase):
 class TestRetryWithMultiprocessing(unittest.TestCase):
     """测试多进程重试"""
 
-    @patch('biz.utils.queue.Process')
-    @patch('biz.utils.queue.threading.Thread')
-    def test_retry_with_multiprocessing(self, mock_thread, mock_process):
+    @patch('threading.Thread')
+    @patch('multiprocessing.Process')
+    def test_retry_with_multiprocessing(self, mock_process, mock_thread):
         """测试多进程重试"""
         mock_process_instance = Mock()
         mock_process.return_value = mock_process_instance
@@ -219,8 +219,8 @@ class TestRetryTask(unittest.TestCase):
             60
         )
 
-    @patch('biz.utils.queue.Redis')
-    @patch('biz.utils.queue.Queue')
+    @patch('redis.Redis')
+    @patch('rq.Queue')
     def test_retry_task_rq(self, mock_queue, mock_redis):
         """测试 RQ 模式下的重试"""
         import os

@@ -134,40 +134,41 @@ class TestNotificationEnabled:
             'wecom_enabled': True
         }
         
+        # 设置钉钉 mock
+        mock_dingtalk_response = Mock(status_code=200)
+        mock_dingtalk_response.json.return_value = {'errmsg': 'ok', 'errcode': 0}
+        
         with patch('biz.utils.im.dingtalk.requests.post') as mock_dingtalk:
-            with patch('biz.utils.im.feishu.requests.post') as mock_feishu:
-                with patch('biz.utils.im.wecom.requests.post') as mock_wecom:
-                    # 设置钉钉 mock 返回值
-                    mock_dingtalk_response = Mock(status_code=200)
-                    mock_dingtalk_response.json.return_value = {'errmsg': 'ok', 'errcode': 0}
-                    mock_dingtalk.return_value = mock_dingtalk_response
-                    
-                    # 设置飞书 mock 返回值
-                    mock_feishu_response = Mock(status_code=200)
-                    mock_feishu_response.json.return_value = {'msg': 'success'}
-                    mock_feishu.return_value = mock_feishu_response
-                    
-                    # 设置企业微信 mock 返回值
-                    mock_wecom_response = Mock(status_code=200)
-                    mock_wecom_response.json.return_value = {'errcode': 0}
-                    mock_wecom.return_value = mock_wecom_response
-                    
-                    # 测试钉钉
-                    dingtalk_notifier = DingTalkNotifier(config)
-                    dingtalk_notifier.send_message('消息1')
-                    
-                    # 测试飞书
-                    feishu_notifier = FeishuNotifier(config)
-                    feishu_notifier.send_message('消息2')
-                    
-                    # 测试企业微信
-                    wecom_notifier = WeComNotifier(config)
-                    wecom_notifier.send_message('消息3')
-                    
-                    # 验证：钉钉和企业微信发送，飞书未发送
-                    assert mock_dingtalk.call_count == 1
-                    assert mock_feishu.call_count == 0
-                    assert mock_wecom.call_count == 1
+            mock_dingtalk.return_value = mock_dingtalk_response
+            
+            # 测试钉钉
+            dingtalk_notifier = DingTalkNotifier(config)
+            dingtalk_notifier.send_message('消息1')
+        
+        # 测试飞书
+        mock_feishu_response = Mock(status_code=200)
+        mock_feishu_response.json.return_value = {'msg': 'success'}
+        
+        with patch('biz.utils.im.feishu.requests.post') as mock_feishu:
+            mock_feishu.return_value = mock_feishu_response
+            
+            feishu_notifier = FeishuNotifier(config)
+            feishu_notifier.send_message('消息2')
+        
+        # 测试企业微信
+        mock_wecom_response = Mock(status_code=200)
+        mock_wecom_response.json.return_value = {'errcode': 0}
+        
+        with patch('biz.utils.im.wecom.requests.post') as mock_wecom:
+            mock_wecom.return_value = mock_wecom_response
+            
+            wecom_notifier = WeComNotifier(config)
+            wecom_notifier.send_message('消息3')
+            
+            # 验证：钉钉和企业微信发送，飞书未发送
+            assert mock_dingtalk.call_count == 1
+            assert mock_feishu.call_count == 0
+            assert mock_wecom.call_count == 1
 
 
 if __name__ == '__main__':
