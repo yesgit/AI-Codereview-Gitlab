@@ -6,7 +6,7 @@
 #   make clean-images     # remove local images built by this Makefile
 
 IMAGE_PREFIX ?= docker.io/hedw
-VERSION ?= 1.4.3
+VERSION ?= 1.4.4
 PLATFORM ?= linux/amd64
 
 # Nexus registry prefix for push
