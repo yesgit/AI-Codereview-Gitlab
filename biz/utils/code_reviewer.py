@@ -104,12 +104,17 @@ class CodeReviewer(BaseReviewer):
                 from biz.service.webhook_service import WebhookService
                 mapping = WebhookService.get_webhook_mapping(project_name=project_name)
                 if mapping and mapping.get('custom_prompt_system') and mapping.get('custom_prompt_user'):
-                    # 使用数据库中的自定义 prompt
+                    # 使用数据库中的自定义 prompt，并经过 Jinja2 渲染处理
+                    style = os.getenv("REVIEW_STYLE", "professional")
+                    
+                    def render_template(template_str: str) -> str:
+                        return Template(template_str).render(style=style)
+                    
                     prompts = {
-                        "system_message": {"role": "system", "content": mapping.get('custom_prompt_system')},
-                        "user_message": {"role": "user", "content": mapping.get('custom_prompt_user')},
+                        "system_message": {"role": "system", "content": render_template(mapping.get('custom_prompt_system'))},
+                        "user_message": {"role": "user", "content": render_template(mapping.get('custom_prompt_user'))},
                     }
-                    logger.info(f"使用项目 {project_name} 的自定义 prompt（从数据库读取）")
+                    logger.info(f"使用项目 {project_name} 的自定义 prompt（从数据库读取并经过 Jinja2 渲染）")
             except Exception as e:
                 logger.warning(f"获取项目 {project_name} 的自定义 prompt 失败: {e}")
         
