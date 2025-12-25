@@ -48,7 +48,8 @@ class BranchWebhookService:
                                        dingtalk_url: Optional[str] = None, feishu_url: Optional[str] = None,
                                        wecom_url: Optional[str] = None, custom_prompt_system: Optional[str] = None,
                                        custom_prompt_user: Optional[str] = None, dingtalk_enabled: Optional[bool] = None,
-                                       feishu_enabled: Optional[bool] = None, wecom_enabled: Optional[bool] = None):
+                                       feishu_enabled: Optional[bool] = None, wecom_enabled: Optional[bool] = None,
+                                       review_style: Optional[str] = None):
         """
         创建或更新分支级webhook配置
         
@@ -61,6 +62,10 @@ class BranchWebhookService:
             wecom_url: 企业微信webhook URL
             custom_prompt_system: 自定义系统提示词
             custom_prompt_user: 自定义用户提示词
+            dingtalk_enabled: 是否启用钉钉通知
+            feishu_enabled: 是否启用飞书通知
+            wecom_enabled: 是否启用企业微信通知
+            review_style: 评审风格，可选值: professional, sarcastic, gentle, humorous
         """
         try:
             now = int(time.time())
@@ -72,19 +77,19 @@ class BranchWebhookService:
                          AND branch_pattern = :branch_pattern 
                          LIMIT 1''')
             
-            ins = text('''INSERT INTO branch_webhooks 
+            ins = text('''INSERT INTO branch_webhooks
                          (gitlab_base_url, project_slug, branch_pattern, dingtalk_url, feishu_url, wecom_url,
                           dingtalk_enabled, feishu_enabled, wecom_enabled,
-                          custom_prompt_system, custom_prompt_user, created_at, updated_at)
+                          custom_prompt_system, custom_prompt_user, review_style, created_at, updated_at)
                          VALUES (:gitlab_base_url, :project_slug, :branch_pattern, :dingtalk_url, :feishu_url,
                                 :wecom_url, :dingtalk_enabled, :feishu_enabled, :wecom_enabled,
-                                :custom_prompt_system, :custom_prompt_user, :created_at, :updated_at)''')
+                                :custom_prompt_system, :custom_prompt_user, :review_style, :created_at, :updated_at)''')
             
-            upd = text('''UPDATE branch_webhooks 
+            upd = text('''UPDATE branch_webhooks
                          SET dingtalk_url = :dingtalk_url, feishu_url = :feishu_url, wecom_url = :wecom_url,
                              dingtalk_enabled = :dingtalk_enabled, feishu_enabled = :feishu_enabled, wecom_enabled = :wecom_enabled,
                              custom_prompt_system = :custom_prompt_system, custom_prompt_user = :custom_prompt_user,
-                             updated_at = :updated_at
+                             review_style = :review_style, updated_at = :updated_at
                          WHERE id = :id''')
             
             with engine.begin() as conn:
@@ -107,6 +112,7 @@ class BranchWebhookService:
                     'wecom_enabled': wecom_enabled,
                     'custom_prompt_system': custom_prompt_system,
                     'custom_prompt_user': custom_prompt_user,
+                    'review_style': review_style,
                     'updated_at': now
                 }
                 
@@ -146,11 +152,11 @@ class BranchWebhookService:
             sql = text('''SELECT id, gitlab_base_url, project_slug, branch_pattern,
                                 dingtalk_url, feishu_url, wecom_url,
                                 dingtalk_enabled, feishu_enabled, wecom_enabled,
-                                custom_prompt_system, custom_prompt_user,
+                                custom_prompt_system, custom_prompt_user, review_style,
                                 created_at, updated_at
                          FROM branch_webhooks
-                         WHERE gitlab_base_url = :gitlab_base_url 
-                         AND project_slug = :project_slug 
+                         WHERE gitlab_base_url = :gitlab_base_url
+                         AND project_slug = :project_slug
                          AND branch_pattern = :branch_pattern
                          LIMIT 1''')
             with engine.connect() as conn:
@@ -194,7 +200,7 @@ class BranchWebhookService:
             sql = text(f'''SELECT id, gitlab_base_url, project_slug, branch_pattern,
                                  dingtalk_url, feishu_url, wecom_url,
                                  dingtalk_enabled, feishu_enabled, wecom_enabled,
-                                 custom_prompt_system, custom_prompt_user,
+                                 custom_prompt_system, custom_prompt_user, review_style,
                                  created_at, updated_at
                           FROM branch_webhooks
                           WHERE {where_clause}
@@ -265,7 +271,8 @@ class BranchWebhookService:
                                    dingtalk_url: Optional[str] = None, feishu_url: Optional[str] = None,
                                    wecom_url: Optional[str] = None, custom_prompt_system: Optional[str] = None,
                                    custom_prompt_user: Optional[str] = None, dingtalk_enabled: Optional[bool] = None,
-                                   feishu_enabled: Optional[bool] = None, wecom_enabled: Optional[bool] = None):
+                                   feishu_enabled: Optional[bool] = None, wecom_enabled: Optional[bool] = None,
+                                   review_style: Optional[str] = None):
         """通过ID更新分支级webhook配置"""
         try:
             now = int(time.time())
@@ -278,7 +285,7 @@ class BranchWebhookService:
                              feishu_url = :feishu_url, wecom_url = :wecom_url,
                              dingtalk_enabled = :dingtalk_enabled, feishu_enabled = :feishu_enabled, wecom_enabled = :wecom_enabled,
                              custom_prompt_system = :custom_prompt_system,
-                             custom_prompt_user = :custom_prompt_user, updated_at = :updated_at
+                             custom_prompt_user = :custom_prompt_user, review_style = :review_style, updated_at = :updated_at
                          WHERE id = :id''')
             
             with engine.begin() as conn:
@@ -300,6 +307,7 @@ class BranchWebhookService:
                     'wecom_enabled': wecom_enabled,
                     'custom_prompt_system': custom_prompt_system,
                     'custom_prompt_user': custom_prompt_user,
+                    'review_style': review_style,
                     'updated_at': now,
                     'id': webhook_id
                 })

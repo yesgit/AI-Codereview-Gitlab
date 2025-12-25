@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Popconfirm, Switch } from 'antd';
+import { Table, Button, Modal, Form, Input, message, Popconfirm, Switch, Select } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { branchWebhookApi } from '@/api/branch-webhooks';
 import type { BranchWebhook, BranchWebhookForm } from '@/types';
@@ -132,14 +132,29 @@ const BranchWebhooks: React.FC = () => {
       width: 120,
       ellipsis: true,
     },
-    { 
-      title: '企业微信启用', 
-      dataIndex: 'wecom_enabled', 
+    {
+      title: '企业微信启用',
+      dataIndex: 'wecom_enabled',
       key: 'wecom_enabled',
       width: 90,
       render: (enabled: boolean) => (
         <Switch checked={enabled} disabled size="small" />
       ),
+    },
+    {
+      title: '评审风格',
+      dataIndex: 'review_style',
+      key: 'review_style',
+      width: 100,
+      render: (style: string) => {
+        const styleMap: Record<string, string> = {
+          'professional': '专业',
+          'sarcastic': '讽刺',
+          'gentle': '温和',
+          'humorous': '幽默',
+        };
+        return styleMap[style] || '默认';
+      },
     },
     {
       title: '操作',
@@ -207,7 +222,23 @@ const BranchWebhooks: React.FC = () => {
           <Form.Item
             label="GitLab 基础 URL"
             name="gitlab_base_url"
-            rules={[{ required: true, message: '请输入 GitLab 基础 URL' }]}
+            tooltip="如 https://gitlab.com 或 http://a.b"
+            rules={[
+              { required: true, message: '请输入 GitLab 基础 URL' },
+              {
+                validator: (_, value) => {
+                  if (!value) {
+                    return Promise.resolve();
+                  }
+                  // 自定义 URL 验证：更宽松的格式检查
+                  const urlPattern = /^(https?:\/\/)?([^\/]+)(\/.*)?$/;
+                  if (!urlPattern.test(value)) {
+                    return Promise.reject(new Error('请输入有效的 URL，如 https://gitlab.com'));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
           >
             <Input placeholder="https://gitlab.com" />
           </Form.Item>
@@ -278,6 +309,23 @@ const BranchWebhooks: React.FC = () => {
 
           <Form.Item label="GitLab Token" name="gitlab_token">
             <Input.Password placeholder="GitLab Personal Access Token" />
+          </Form.Item>
+
+          <Form.Item 
+            label="评审风格" 
+            name="review_style" 
+            tooltip="选择代码评审的风格，如不选择则使用默认风格"
+          >
+            <Select 
+              placeholder="选择评审风格" 
+              allowClear
+              options={[
+                { label: '专业风格', value: 'professional' },
+                { label: '讽刺风格', value: 'sarcastic' },
+                { label: '温和风格', value: 'gentle' },
+                { label: '幽默风格', value: 'humorous' },
+              ]}
+            />
           </Form.Item>
 
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>

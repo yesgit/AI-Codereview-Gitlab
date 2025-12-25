@@ -25,6 +25,8 @@ class BaseReviewer(abc.ABC):
         if not style:
             # 如果未提供, 从环境变量中获取审查风格，默认为 "professional"
             style = os.getenv("REVIEW_STYLE", "professional")
+        
+        logger.info(f"使用评审风格: {style}")
 
         if not prompt_templates_file:
             # 如果未提供, 使用默认的提示词配置文件路径
@@ -95,26 +97,62 @@ class CodeReviewer(BaseReviewer):
             return review_result[11:-3].strip()
         return review_result
 
-    def review_code(self, diffs_text: str, commits_text: str = "", project_name: str = "") -> str:
+    def review_code(self, diffs_text: str, commits_text: str = "", project_name: str = "", gitlab_base_url: str = "", project_slug: str = "", branch_name: str = "") -> str:
         """Review 代码并返回结果"""
-        # 优先从数据库获取项目级自定义 prompt
+        # 优先从数据库获取分支级或项目级配置
         prompts = None
-        if project_name:
+        review_style = None
+        
+        # 1. 优先尝试获取分支级配置
+        if gitlab_base_url and project_slug and branch_name:
+            try:
+                from biz.service.branch_webhook_service import BranchWebhookService
+                branch_config = BranchWebhookService.match_branch_webhook(gitlab_base_url, project_slug, branch_name)
+                if branch_config:
+                    # 获取评审风格
+                    review_style = branch_config.get('review_style')
+                    if review_style:
+                        logger.info(f"使用分支配置的评审风格: {review_style}")
+                    
+                    # 获取自定义 prompt
+                    if branch_config.get('custom_prompt_system') and branch_config.get('custom_prompt_user'):
+                        style = review_style or os.getenv("REVIEW_STYLE", "professional")
+                        
+                        def render_template(template_str: str) -> str:
+                            return Template(template_str).render(style=style)
+                        
+                        prompts = {
+                            "system_message": {"role": "system", "content": render_template(branch_config.get('custom_prompt_system'))},
+                            "user_message": {"role": "user", "content": render_template(branch_config.get('custom_prompt_user'))},
+                        }
+                        logger.info(f"使用分支配置的自定义 prompt（从数据库读取并经过 Jinja2 渲染）")
+            except Exception as e:
+                logger.warning(f"获取分支配置失败: {e}")
+        
+        # 2. 如果没有分支配置，尝试获取项目级配置
+        if not review_style and project_name:
             try:
                 from biz.service.webhook_service import WebhookService
                 mapping = WebhookService.get_webhook_mapping(project_name=project_name)
-                if mapping and mapping.get('custom_prompt_system') and mapping.get('custom_prompt_user'):
-                    # 使用数据库中的自定义 prompt，并经过 Jinja2 渲染处理
-                    style = os.getenv("REVIEW_STYLE", "professional")
+                if mapping:
+                    # 获取评审风格
+                    if not review_style:
+                        review_style = mapping.get('review_style')
+                        if review_style:
+                            logger.info(f"使用项目配置的评审风格: {review_style}")
                     
-                    def render_template(template_str: str) -> str:
-                        return Template(template_str).render(style=style)
-                    
-                    prompts = {
-                        "system_message": {"role": "system", "content": render_template(mapping.get('custom_prompt_system'))},
-                        "user_message": {"role": "user", "content": render_template(mapping.get('custom_prompt_user'))},
-                    }
-                    logger.info(f"使用项目 {project_name} 的自定义 prompt（从数据库读取并经过 Jinja2 渲染）")
+                    # 获取自定义 prompt
+                    if not prompts and mapping.get('custom_prompt_system') and mapping.get('custom_prompt_user'):
+                        style = review_style or os.getenv("REVIEW_STYLE", "professional")
+                        
+                        def render_template(template_str: str) -> str:
+                            return Template(template_str).render(style=style)
+                        
+                        prompts = {
+                            "system_message": {"role": "system", "content": render_template(mapping.get('custom_prompt_system'))},
+                            "user_message": {"role": "user", "content": render_template(mapping.get('custom_prompt_user'))},
+                        }
+                        logger.info(f"使用项目 {project_name} 的自定义 prompt（从数据库读取并经过 Jinja2 渲染）")
             except Exception as e:
                 logger.warning(f"获取项目 {project_name} 的自定义 prompt 失败: {e}")
         
@@ -126,9 +164,9 @@ class CodeReviewer(BaseReviewer):
                 prompts = self._load_prompts(prompt_key="code_review_prompt", prompt_templates_file=project_prompts_path)
                 logger.info(f"使用环境变量配置的 prompt 模板文件: {project_prompts_path}")
         
-        # 如果都没有配置，使用默认 prompts
+        # 如果都没有配置，使用默认 prompts（使用获取到的评审风格）
         if not prompts:
-            prompts = self.prompts
+            prompts = self._load_prompts("code_review_prompt", style=review_style)
         messages = [
             prompts["system_message"],
             {
@@ -138,7 +176,7 @@ class CodeReviewer(BaseReviewer):
         ]
         return self.call_llm(messages)
 
-    def review_changes_in_batches(self, changes: List[Dict[str, Any]], commits_text: str = "", project_name: str = "") -> str:
+    def review_changes_in_batches(self, changes: List[Dict[str, Any]], commits_text: str = "", project_name: str = "", gitlab_base_url: str = "", project_slug: str = "", branch_name: str = "") -> str:
         """
         按文件批次审查代码变更，然后汇总所有审查结果
         :param changes: 代码变更列表，每个元素是一个包含文件信息的字典
@@ -190,9 +228,9 @@ class CodeReviewer(BaseReviewer):
                 logger.warning(f"批次 {batch_num} 的变更超过 {review_max_tokens} tokens，将截断")
                 batch_text = truncate_text_by_tokens(batch_text, review_max_tokens)
 
-            # 审查当前批次，传递 project_name 参数
+            # 审查当前批次，传递项目/分支参数
             try:
-                review_result = self.review_code(batch_text, commits_text, project_name).strip()
+                review_result = self.review_code(batch_text, commits_text, project_name, gitlab_base_url, project_slug, branch_name).strip()
                 if review_result.startswith("```markdown") and review_result.endswith("```"):
                     review_result = review_result[11:-3].strip()
 
@@ -216,21 +254,48 @@ class CodeReviewer(BaseReviewer):
         summary_result = self._summarize_reviews(partial_reviews, project_name)
         return summary_result
 
-    def _summarize_reviews(self, partial_reviews: List[str], project_name: str = "") -> str:
+    def _summarize_reviews(self, partial_reviews: List[str], project_name: str = "", gitlab_base_url: str = "", project_slug: str = "", branch_name: str = "") -> str:
         """
         使用 summary_merge_review_prompt 汇总多个审查结果
         :param partial_reviews: 各批次的审查结果列表
         :param project_name: 项目名称
         :return: 汇总后的总审查报告
         """
-        # 加载汇总提示词，支持项目级别的自定义
+        # 获取评审风格
+        review_style = None
+        
+        # 1. 优先尝试获取分支级配置
+        if gitlab_base_url and project_slug and branch_name:
+            try:
+                from biz.service.branch_webhook_service import BranchWebhookService
+                branch_config = BranchWebhookService.match_branch_webhook(gitlab_base_url, project_slug, branch_name)
+                if branch_config:
+                    review_style = branch_config.get('review_style')
+                    if review_style:
+                        logger.info(f"汇总时使用分支配置的评审风格: {review_style}")
+            except Exception as e:
+                logger.warning(f"获取分支配置失败: {e}")
+        
+        # 2. 如果没有分支配置，尝试获取项目级配置
+        if not review_style and project_name:
+            try:
+                from biz.service.webhook_service import WebhookService
+                mapping = WebhookService.get_webhook_mapping(project_name=project_name)
+                if mapping and mapping.get('review_style'):
+                    review_style = mapping.get('review_style')
+                    if review_style:
+                        logger.info(f"汇总时使用项目配置的评审风格: {review_style}")
+            except Exception as e:
+                logger.warning(f"获取项目配置失败: {e}")
+        
+        # 加载汇总提示词，使用获取到的评审风格
         normalized_project_name = project_name.replace("-", "_") if project_name else project_name
         project_prompts_path = os.getenv(f"{normalized_project_name.upper()}_PROMPT", None)
         
         summary_prompts = (
-            self._load_prompts(prompt_key="summary_merge_review_prompt", prompt_templates_file=project_prompts_path)
+            self._load_prompts(prompt_key="summary_merge_review_prompt", style=review_style, prompt_templates_file=project_prompts_path)
             if project_prompts_path
-            else self._load_prompts("summary_merge_review_prompt", os.getenv("REVIEW_STYLE", "professional"))
+            else self._load_prompts("summary_merge_review_prompt", style=review_style)
         )
 
         # 拼接所有分批审查结果

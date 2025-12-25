@@ -177,7 +177,10 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
                     project_name = webhook_data['project']['name']
                     commits_text = ';'.join(commit_messages)
                     code_reviewer = CodeReviewer()
-                    review_result = code_reviewer.review_changes_in_batches(all_changes, commits_text, project_name)
+                    review_result = code_reviewer.review_changes_in_batches(
+                        all_changes, commits_text, project_name, gitlab_base_url, project_slug,
+                        webhook_data.get('ref', '').replace('refs/heads/', '')
+                    )
                     score = CodeReviewer.parse_review_score(review_text=review_result)
                     
                     # 发送该 author 的审查结果到 GitLab（在最后一次提交上添加评论）
@@ -321,9 +324,11 @@ def _handle_commit_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slu
         commit_message = "Review triggered by @AI comment"
         commit_author = getattr(handler, 'commit_author', handler.author)
         
-        # 执行代码评审
+        # 执行代码评审（commit 评审没有分支信息，无法使用分支级配置）
         code_reviewer = CodeReviewer()
-        review_result = code_reviewer.review_changes_in_batches(changes, commit_message, project_name)
+        review_result = code_reviewer.review_changes_in_batches(
+            changes, commit_message, project_name, gitlab_base_url, project_slug, branch_name=""
+        )
         score = CodeReviewer.parse_review_score(review_text=review_result)
         
         # 格式化评审结果（添加触发源标识）
@@ -423,7 +428,10 @@ def _handle_mr_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slug,
         # 执行代码评审
         commits_text = ';'.join(commit.get('title', '') for commit in commits)
         code_reviewer = CodeReviewer()
-        review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
+        review_result = code_reviewer.review_changes_in_batches(
+            changes, commits_text, project_name, gitlab_base_url, project_slug,
+            merge_request.get('source_branch', '')
+        )
         score = CodeReviewer.parse_review_score(review_text=review_result)
         
         # 格式化评审结果（添加触发源标识）
@@ -546,7 +554,10 @@ def handle_merge_request_event(webhook_data: dict, gitlab_token: str, gitlab_url
         project_name = webhook_data['project']['name']
         commits_text = ';'.join(commit['title'] for commit in commits)
         code_reviewer = CodeReviewer()
-        review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
+        review_result = code_reviewer.review_changes_in_batches(
+            changes, commits_text, project_name, gitlab_base_url, project_slug,
+            webhook_data['object_attributes']['source_branch']
+        )
 
         # 将review结果提交到Gitlab的 notes，使用新格式避免包含@AI触发词
         handler.add_merge_request_notes(f'🤖 AI Code Review Result\n\n{review_result}')
@@ -614,7 +625,10 @@ def handle_github_push_event(webhook_data: dict, github_token: str, github_url: 
                 project_name = webhook_data['repository']['name']
                 commits_text = ';'.join(commit.get('message', '').strip() for commit in commits)
                 code_reviewer = CodeReviewer()
-                review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
+                review_result = code_reviewer.review_changes_in_batches(
+                    changes, commits_text, project_name, github_base_url, project_slug,
+                    webhook_data.get('ref', '').replace('refs/heads/', '')
+                )
                 score = CodeReviewer.parse_review_score(review_text=review_result)
                 for item in changes:
                     additions += item.get('additions', 0)
@@ -712,7 +726,10 @@ def handle_github_pull_request_event(webhook_data: dict, github_token: str, gith
         project_name = webhook_data['repository']['name']
         commits_text = ';'.join(commit['title'] for commit in commits)
         code_reviewer = CodeReviewer()
-        review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
+        review_result = code_reviewer.review_changes_in_batches(
+            changes, commits_text, project_name, github_base_url, project_slug,
+            webhook_data['pull_request']['head']['ref']
+        )
 
         # 将review结果提交到GitHub的 notes，使用新格式避免包含@AI触发词
         handler.add_pull_request_notes(f'🤖 AI Code Review Result\n\n{review_result}')
@@ -779,7 +796,10 @@ def handle_gitea_push_event(webhook_data: dict, gitea_token: str, gitea_url: str
                 project_name = webhook_data.get('repository', {}).get('name')
                 commits_text = ';'.join(commit.get('message', '').strip() for commit in commits)
                 code_reviewer = CodeReviewer()
-                review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
+                review_result = code_reviewer.review_changes_in_batches(
+                    changes, commits_text, project_name, gitea_base_url, project_slug,
+                    handler.branch_name
+                )
                 score = CodeReviewer.parse_review_score(review_text=review_result)
                 for item in changes:
                     additions += item.get('additions', 0)
@@ -870,7 +890,10 @@ def handle_gitea_pull_request_event(webhook_data: dict, gitea_token: str, gitea_
         project_name = webhook_data.get('repository', {}).get('name')
         commits_text = ';'.join(commit.get('title', '') for commit in commits)
         code_reviewer = CodeReviewer()
-        review_result = code_reviewer.review_changes_in_batches(changes, commits_text, project_name)
+        review_result = code_reviewer.review_changes_in_batches(
+            changes, commits_text, project_name, gitea_base_url, project_slug,
+            head_info.get('ref') or pull_request.get('head_branch', '')
+        )
 
         handler.add_pull_request_notes(f'🤖 AI Code Review Result\n\n{review_result}')
 

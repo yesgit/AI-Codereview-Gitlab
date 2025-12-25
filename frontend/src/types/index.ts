@@ -29,25 +29,28 @@ export interface Webhook {
   wecom_enabled?: boolean;
   custom_prompt_system?: string;
   custom_prompt_user?: string;
+  review_style?: string;
   gitlab_token?: string;
   created_at?: number;
   updated_at?: number;
 }
 
 export interface WebhookForm {
-  project_name?: string;
+  id?: number;
+  project_name: string;
   url_slug?: string;
   gitlab_base_url?: string;
   project_slug?: string;
   dingtalk_url?: string;
   feishu_url?: string;
   wecom_url?: string;
-  dingtalk_enabled?: boolean;
-  feishu_enabled?: boolean;
-  wecom_enabled?: boolean;
   custom_prompt_system?: string;
   custom_prompt_user?: string;
   gitlab_token?: string;
+  dingtalk_enabled?: boolean;
+  feishu_enabled?: boolean;
+  wecom_enabled?: boolean;
+  review_style?: string;
 }
 
 export interface BranchWebhook {
@@ -63,6 +66,7 @@ export interface BranchWebhook {
   wecom_enabled?: boolean;
   custom_prompt_system?: string;
   custom_prompt_user?: string;
+  review_style?: string;
   gitlab_token?: string;
   created_at?: number;
   updated_at?: number;
@@ -80,8 +84,16 @@ export interface BranchWebhookForm {
   wecom_enabled?: boolean;
   custom_prompt_system?: string;
   custom_prompt_user?: string;
+  review_style?: string;
   gitlab_token?: string;
 }
+
+export const ReviewStyleOptions = [
+  { label: '专业风格', value: 'professional' },
+  { label: '讽刺风格', value: 'sarcastic' },
+  { label: '温和风格', value: 'gentle' },
+  { label: '幽默风格', value: 'humorous' },
+];
 
 export interface ReviewLog {
   id?: number;

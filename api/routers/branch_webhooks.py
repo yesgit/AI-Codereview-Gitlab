@@ -24,6 +24,7 @@ class BranchWebhookCreate(BaseModel):
     wecom_enabled: Optional[bool] = None
     custom_prompt_system: Optional[str] = None
     custom_prompt_user: Optional[str] = None
+    review_style: Optional[str] = None
     gitlab_token: Optional[str] = None
 
 
@@ -39,6 +40,7 @@ class BranchWebhookUpdate(BaseModel):
     wecom_enabled: Optional[bool] = None
     custom_prompt_system: Optional[str] = None
     custom_prompt_user: Optional[str] = None
+    review_style: Optional[str] = None
     gitlab_token: Optional[str] = None
 
 
@@ -55,6 +57,7 @@ class BranchWebhookResponse(BaseModel):
     wecom_enabled: Optional[bool] = None
     custom_prompt_system: Optional[str] = None
     custom_prompt_user: Optional[str] = None
+    review_style: Optional[str] = None
     gitlab_token: Optional[str] = None
     created_at: Optional[int] = None
     updated_at: Optional[int] = None
@@ -106,6 +109,7 @@ async def create_branch_webhook(webhook: BranchWebhookCreate, current_user: str 
         wecom_enabled=webhook.wecom_enabled,
         custom_prompt_system=webhook.custom_prompt_system,
         custom_prompt_user=webhook.custom_prompt_user,
+        review_style=webhook.review_style,
         gitlab_token=webhook.gitlab_token
     )
     
@@ -164,6 +168,7 @@ async def update_branch_webhook(config_id: int, webhook: BranchWebhookUpdate, cu
         wecom_enabled=webhook.wecom_enabled,
         custom_prompt_system=webhook.custom_prompt_system,
         custom_prompt_user=webhook.custom_prompt_user,
+        review_style=webhook.review_style,
         gitlab_token=webhook.gitlab_token
     )
     
