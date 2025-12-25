@@ -145,6 +145,16 @@ def daily_report_task():
 
         if df.empty:
             logger.info("No data to process.")
+            # 无数据时也发送通知，告知用户今日无审查记录
+            message = f"""# 📋 代码提交日报 - 今日暂无提交
+
+今日没有代码审查记录。
+"""
+            notifier.send_notification(
+                content=message,
+                msg_type="markdown",
+                title="代码提交日报 - 今日暂无提交"
+            )
             return
 
         # 转换为字典列表

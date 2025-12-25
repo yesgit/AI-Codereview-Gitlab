@@ -84,12 +84,19 @@ def test_daily_report_trigger_route_with_data(client):
 
 def test_daily_report_task_no_data():
     """测试日报任务函数 - 无数据情况"""
-    with patch('biz.api.routes.daily_report.ReviewService') as mock_service:
+    with patch('biz.api.routes.daily_report.ReviewService') as mock_service, \
+         patch('biz.api.routes.daily_report.notifier.send_notification') as mock_notify:
         mock_df = pd.DataFrame()
         mock_service.return_value.get_mr_review_logs.return_value = mock_df
         
-        # 不应该抛出异常
+        # 执行任务
         daily_report_task()
+        
+        # 验证即使没有数据也会发送通知
+        assert mock_notify.called
+        # 验证通知内容包含"今日暂无提交"
+        call_args = mock_notify.call_args
+        assert "今日暂无提交" in call_args[1]['content'] or "今日暂无提交" in call_args[0][0]
 
 
 def test_daily_report_task_with_project_and_branch_config():
