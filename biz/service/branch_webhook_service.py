@@ -17,7 +17,7 @@ class BranchWebhookService:
         """初始化分支级webhook配置表"""
         try:
             engine = get_engine()
-            from sqlalchemy import MetaData, Table, Column, Integer, String, Text, UniqueConstraint
+            from sqlalchemy import MetaData, Table, Column, Integer, String, Text, Boolean, UniqueConstraint
 
             metadata = MetaData()
             Table(
@@ -29,11 +29,12 @@ class BranchWebhookService:
                 Column('dingtalk_url', Text),
                 Column('feishu_url', Text),
                 Column('wecom_url', Text),
-                Column('dingtalk_enabled'),
-                Column('feishu_enabled'),
-                Column('wecom_enabled'),
+                Column('dingtalk_enabled', Boolean),
+                Column('feishu_enabled', Boolean),
+                Column('wecom_enabled', Boolean),
                 Column('custom_prompt_system', Text),
                 Column('custom_prompt_user', Text),
+                Column('review_style', String(50)),
                 Column('created_at', Integer),
                 Column('updated_at', Integer),
                 UniqueConstraint('gitlab_base_url', 'project_slug', 'branch_pattern',

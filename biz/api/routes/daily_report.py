@@ -113,14 +113,14 @@ def send_report_to_config(logs: List[dict], config: dict, title_prefix: str = No
             title=f"代码提交日报 - {title_prefix or '全部'}"
         )
     if config.get('feishu_url'):
-        fs_notifier = FeishuNotifier(webhook_url=config['feishu_url'])
+        fs_notifier = FeishuNotifier(config=config)
         fs_notifier.send_message(
             content=report_txt, 
             msg_type="markdown", 
             title=f"代码提交日报 - {title_prefix or '全部'}"
         )
     if config.get('wecom_url'):
-        wc_notifier = WeComNotifier(webhook_url=config['wecom_url'])
+        wc_notifier = WeComNotifier(config=config)
         wc_notifier.send_message(
             content=report_txt, 
             msg_type="markdown", 
