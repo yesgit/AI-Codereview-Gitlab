@@ -4,7 +4,7 @@
 from typing import List, Optional
 import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from biz.service.review_service import ReviewService
@@ -32,10 +32,10 @@ class ReviewStatsResponse(BaseModel):
 
 @router.get("/mr")
 async def get_mr_reviews(
-    authors: Optional[List[str]] = None,
-    project_names: Optional[List[str]] = None,
-    updated_at_gte: Optional[int] = None,
-    updated_at_lte: Optional[int] = None,
+    authors: Optional[List[str]] = Query(None),
+    project_names: Optional[List[str]] = Query(None),
+    updated_at_gte: Optional[int] = Query(None),
+    updated_at_lte: Optional[int] = Query(None),
     current_user: str = Depends(get_current_user)
 ):
     """获取 MR 审查记录"""
@@ -46,10 +46,10 @@ async def get_mr_reviews(
         updated_at_lte=updated_at_lte
     )
     
-    # 将 datetime 转换为可读格式（使用 UTC 时间）
+    # 将 datetime 转换为可读格式（从 UTC 转换为北京时间 +8小时）
     if not df.empty and 'updated_at' in df.columns:
         df['updated_at'] = df['updated_at'].apply(
-            lambda ts: datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+            lambda ts: (datetime.datetime.utcfromtimestamp(ts) + datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
             if isinstance(ts, (int, float)) else ts
         )
     
@@ -62,10 +62,10 @@ async def get_mr_reviews(
 
 @router.get("/push")
 async def get_push_reviews(
-    authors: Optional[List[str]] = None,
-    project_names: Optional[List[str]] = None,
-    updated_at_gte: Optional[int] = None,
-    updated_at_lte: Optional[int] = None,
+    authors: Optional[List[str]] = Query(None),
+    project_names: Optional[List[str]] = Query(None),
+    updated_at_gte: Optional[int] = Query(None),
+    updated_at_lte: Optional[int] = Query(None),
     current_user: str = Depends(get_current_user)
 ):
     """获取 Push 审查记录"""
@@ -76,10 +76,10 @@ async def get_push_reviews(
         updated_at_lte=updated_at_lte
     )
     
-    # 将 datetime 转换为可读格式（使用 UTC 时间）
+    # 将 datetime 转换为可读格式（从 UTC 转换为北京时间 +8小时）
     if not df.empty and 'updated_at' in df.columns:
         df['updated_at'] = df['updated_at'].apply(
-            lambda ts: datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+            lambda ts: (datetime.datetime.utcfromtimestamp(ts) + datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
             if isinstance(ts, (int, float)) else ts
         )
     
@@ -92,10 +92,10 @@ async def get_push_reviews(
 
 @router.get("/stats")
 async def get_stats(
-    authors: Optional[List[str]] = None,
-    project_names: Optional[List[str]] = None,
-    updated_at_gte: Optional[int] = None,
-    updated_at_lte: Optional[int] = None,
+    authors: Optional[List[str]] = Query(None),
+    project_names: Optional[List[str]] = Query(None),
+    updated_at_gte: Optional[int] = Query(None),
+    updated_at_lte: Optional[int] = Query(None),
     current_user: str = Depends(get_current_user)
 ):
     """获取统计数据"""

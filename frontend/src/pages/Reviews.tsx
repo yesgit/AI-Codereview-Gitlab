@@ -10,10 +10,13 @@ const { TabPane } = Tabs;
 
 const Reviews: React.FC = () => {
   const [activeTab, setActiveTab] = useState('mr');
-  const [data, setData] = useState<ReviewLog[]>([]);
+  const [mrData, setMrData] = useState<ReviewLog[]>([]);
+  const [pushData, setPushData] = useState<ReviewLog[]>([]);
   const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [averageScore, setAverageScore] = useState(0);
+  const [mrTotal, setMrTotal] = useState(0);
+  const [pushTotal, setPushTotal] = useState(0);
+  const [mrAverageScore, setMrAverageScore] = useState(0);
+  const [pushAverageScore, setPushAverageScore] = useState(0);
   const [authors, setAuthors] = useState<string[]>([]);
   const [projects, setProjects] = useState<string[]>([]);
   const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]);
@@ -21,30 +24,41 @@ const Reviews: React.FC = () => {
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [sendingReport, setSendingReport] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = async (tab?: string) => {
     setLoading(true);
-    try {
-      const params: any = {};
-      if (selectedAuthors.length > 0) params.authors = selectedAuthors;
-      if (selectedProjects.length > 0) params.project_names = selectedProjects;
-      if (dateRange) {
-        params.updated_at_gte = dateRange[0].unix();
-        params.updated_at_lte = dateRange[1].unix();
-      }
+    const currentTab = tab || activeTab;
+    const params: any = {};
+    if (selectedAuthors.length > 0) params.authors = selectedAuthors;
+    if (selectedProjects.length > 0) params.project_names = selectedProjects;
+    if (dateRange) {
+      params.updated_at_gte = dateRange[0].unix();
+      params.updated_at_lte = dateRange[1].unix();
+    }
 
-      const response = activeTab === 'mr' 
-        ? await reviewsApi.getMrReviews(params)
-        : await reviewsApi.getPushReviews(params);
-      
-      setData(response.data);
-      setTotal(response.total);
-      setAverageScore(response.average_score);
-      
-      // 提取唯一值用于筛选
-      const uniqueAuthors = Array.from(new Set(response.data.map((item: ReviewLog) => item.author).filter((s): s is string => !!s)));
-      const uniqueProjects = Array.from(new Set(response.data.map((item: ReviewLog) => item.project_name).filter((s): s is string => !!s)));
-      setAuthors(uniqueAuthors);
-      setProjects(uniqueProjects);
+    try {
+      if (currentTab === 'mr') {
+        const response = await reviewsApi.getMrReviews(params);
+        setMrData(response.data);
+        setMrTotal(response.total);
+        setMrAverageScore(response.average_score);
+        
+        // 提取唯一值用于筛选
+        const uniqueAuthors = Array.from(new Set(response.data.map((item: ReviewLog) => item.author).filter((s): s is string => !!s)));
+        const uniqueProjects = Array.from(new Set(response.data.map((item: ReviewLog) => item.project_name).filter((s): s is string => !!s)));
+        setAuthors(uniqueAuthors);
+        setProjects(uniqueProjects);
+      } else {
+        const response = await reviewsApi.getPushReviews(params);
+        setPushData(response.data);
+        setPushTotal(response.total);
+        setPushAverageScore(response.average_score);
+        
+        // 提取唯一值用于筛选
+        const uniqueAuthors = Array.from(new Set(response.data.map((item: ReviewLog) => item.author).filter((s): s is string => !!s)));
+        const uniqueProjects = Array.from(new Set(response.data.map((item: ReviewLog) => item.project_name).filter((s): s is string => !!s)));
+        setAuthors(uniqueAuthors);
+        setProjects(uniqueProjects);
+      }
     } catch (error) {
       console.error('Failed to fetch reviews:', error);
     } finally {
@@ -52,9 +66,20 @@ const Reviews: React.FC = () => {
     }
   };
 
+  const handleSearch = () => {
+    fetchData(activeTab);
+  };
+
+  const handleReset = () => {
+    setSelectedAuthors([]);
+    setSelectedProjects([]);
+    setDateRange(null);
+  };
+
   useEffect(() => {
-    fetchData();
-  }, [activeTab, selectedAuthors, selectedProjects, dateRange]);
+    // 仅在标签页切换时自动刷新，筛选条件变化不自动刷新
+    fetchData(activeTab);
+  }, [activeTab]);
 
   const handleSendDailyReport = async () => {
     setSendingReport(true);
@@ -119,6 +144,12 @@ const Reviews: React.FC = () => {
             allowClear
           />
           <RangePicker onChange={(dates) => setDateRange(dates as any)} />
+          <Button type="primary" onClick={handleSearch}>
+            查询
+          </Button>
+          <Button onClick={handleReset}>
+            重置
+          </Button>
         </Space>
         <Space>
           <Button 
@@ -130,26 +161,26 @@ const Reviews: React.FC = () => {
             手动发送日报
           </Button>
           <div>
-            共 {total} 条记录，平均评分: <strong>{averageScore.toFixed(1)}</strong>
+            共 {activeTab === 'mr' ? mrTotal : pushTotal} 条记录，平均评分: <strong>{(activeTab === 'mr' ? mrAverageScore : pushAverageScore).toFixed(1)}</strong>
           </div>
         </Space>
       </div>
       
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
-        <TabPane tab={`MR 审查记录 (${data.length})`} key="mr">
+        <TabPane tab={`MR 审查记录 (${mrData.length})`} key="mr">
           <Table
             columns={mrColumns}
-            dataSource={data}
+            dataSource={mrData}
             rowKey="id"
             loading={loading}
             pagination={{ pageSize: 20 }}
             scroll={{ x: 1200 }}
           />
         </TabPane>
-        <TabPane tab={`Push 审查记录 (${data.length})`} key="push">
+        <TabPane tab={`Push 审查记录 (${pushData.length})`} key="push">
           <Table
             columns={pushColumns}
-            dataSource={data}
+            dataSource={pushData}
             rowKey="id"
             loading={loading}
             pagination={{ pageSize: 20 }}

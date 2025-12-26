@@ -1,10 +1,14 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import { message } from 'antd';
+import qs from 'qs';
 
 // 使用相对路径，前端和后端在同域名下时无需指定完整 URL
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 30000,
+  paramsSerializer: (params) => {
+    return qs.stringify(params, { arrayFormat: 'repeat', skipNulls: true });
+  },
   headers: {
     'Content-Type': 'application/json',
   },

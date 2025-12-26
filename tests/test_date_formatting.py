@@ -53,7 +53,7 @@ class TestDateFormatting:
     
     @patch('api.routers.reviews.ReviewService')
     def test_mr_reviews_date_formatting(self, mock_review_service):
-        """测试 MR 审查记录 API 的日期格式化"""
+        """测试 MR 审查记录 API 的日期格式化（UTC转北京时间）"""
         # 模拟返回的数据
         mock_df = pd.DataFrame([
             {
@@ -62,7 +62,7 @@ class TestDateFormatting:
                 'author': 'test-user',
                 'source_branch': 'feature/test',
                 'target_branch': 'main',
-                'updated_at': 1735084800,  # UTC 时间戳
+                'updated_at': 1735084800,  # UTC 时间戳: 2024-12-25 00:00:00 UTC
                 'commit_messages': 'test commit',
                 'score': 85,
                 'url': 'http://example.com',
@@ -79,20 +79,20 @@ class TestDateFormatting:
         # 导入并测试 API
         from api.routers import reviews
         
-        # 调用日期格式化逻辑
+        # 调用日期格式化逻辑（UTC 转北京时间 +8小时）
         df = mock_df.copy()
         if not df.empty and 'updated_at' in df.columns:
             df['updated_at'] = df['updated_at'].apply(
-                lambda ts: datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+                lambda ts: (datetime.datetime.utcfromtimestamp(ts) + datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
                 if isinstance(ts, (int, float)) else ts
             )
         
-        # 验证日期格式（修正为正确的年份）
-        assert df.iloc[0]['updated_at'] == "2024-12-25 00:00:00"
+        # 验证日期格式（UTC 时间 00:00:00 → 北京时间 08:00:00）
+        assert df.iloc[0]['updated_at'] == "2024-12-25 08:00:00"
         
     @patch('api.routers.reviews.ReviewService')
     def test_push_reviews_date_formatting(self, mock_review_service):
-        """测试 Push 审查记录 API 的日期格式化"""
+        """测试 Push 审查记录 API 的日期格式化（UTC转北京时间）"""
         # 模拟返回的数据
         mock_df = pd.DataFrame([
             {
@@ -100,7 +100,7 @@ class TestDateFormatting:
                 'project_name': 'test-project',
                 'author': 'test-user',
                 'branch': 'main',
-                'updated_at': 1735084800,  # UTC 时间戳
+                'updated_at': 1735084800,  # UTC 时间戳: 2024-12-25 00:00:00 UTC
                 'commit_messages': 'test commit',
                 'score': 90,
                 'review_result': 'good',
@@ -113,16 +113,16 @@ class TestDateFormatting:
         
         mock_review_service.return_value.get_push_review_logs.return_value = mock_df
         
-        # 调用日期格式化逻辑
+        # 调用日期格式化逻辑（UTC 转北京时间 +8小时）
         df = mock_df.copy()
         if not df.empty and 'updated_at' in df.columns:
             df['updated_at'] = df['updated_at'].apply(
-                lambda ts: datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+                lambda ts: (datetime.datetime.utcfromtimestamp(ts) + datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
                 if isinstance(ts, (int, float)) else ts
             )
         
-        # 验证日期格式（修正为正确的年份）
-        assert df.iloc[0]['updated_at'] == "2024-12-25 00:00:00"
+        # 验证日期格式（UTC 时间 00:00:00 → 北京时间 08:00:00）
+        assert df.iloc[0]['updated_at'] == "2024-12-25 08:00:00"
     
     def test_empty_dataframe_handling(self):
         """测试空数据框的处理"""
@@ -149,10 +149,10 @@ class TestDateFormatting:
             }
         ])
         
-        # 应用日期格式化逻辑
+        # 应用日期格式化逻辑（UTC 转北京时间 +8小时）
         if not df.empty and 'updated_at' in df.columns:
             df['updated_at'] = df['updated_at'].apply(
-                lambda ts: datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+                lambda ts: (datetime.datetime.utcfromtimestamp(ts) + datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
                 if isinstance(ts, (int, float)) else ts
             )
         
