@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Popconfirm, Switch, Select, Tooltip } from 'antd';
+import { Table, Button, Modal, Form, Input, message, Popconfirm, Switch, Select, Tooltip, Tabs } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { webhookApi } from '@/api/webhooks';
 import type { Webhook, WebhookForm } from '@/types';
@@ -264,147 +264,178 @@ const Webhooks: React.FC = () => {
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         footer={null}
-        width={600}
+        width={800}
       >
         <Form
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
+          scrollToFirstError
+          onFinishFailed={() => {
+            message.warning('请检查表单，必填字段可能位于其他标签页中');
+          }}
         >
-          <Form.Item
-            label="GitLab 基础 URL"
-            name="gitlab_base_url"
-            tooltip="如 https://gitlab.com 或 http://a.b"
-            rules={[
+          <Tabs
+            defaultActiveKey="basic"
+            items={[
               {
-                validator: (_, value) => {
-                  if (!value) {
-                    return Promise.resolve();
-                  }
-                  // 自定义 URL 验证：更宽松的格式检查
-                  const urlPattern = /^(https?:\/\/)?([^\/]+)(\/.*)?$/;
-                  if (!urlPattern.test(value)) {
-                    return Promise.reject(new Error('请输入有效的 URL，如 https://gitlab.com'));
-                  }
-                  return Promise.resolve();
-                },
+                key: 'basic',
+                label: '📋 基础配置',
+                children: (
+                  <div style={{ padding: '8px 0' }}>
+                    <Form.Item
+                      label="GitLab 基础 URL"
+                      name="gitlab_base_url"
+                      tooltip="如 https://gitlab.com 或 http://a.b"
+                      rules={[
+                        {
+                          validator: (_, value) => {
+                            if (!value) {
+                              return Promise.resolve();
+                            }
+                            // 自定义 URL 验证：更宽松的格式检查
+                            const urlPattern = /^(https?:\/\/)?([^\/]+)(\/.*)?$/;
+                            if (!urlPattern.test(value)) {
+                              return Promise.reject(new Error('请输入有效的 URL，如 https://gitlab.com'));
+                            }
+                            return Promise.resolve();
+                          },
+                        },
+                      ]}
+                    >
+                      <Input placeholder="https://gitlab.com" />
+                    </Form.Item>
+
+                    <Form.Item
+                      label="项目 Slug"
+                      name="project_slug"
+                      tooltip="如 group/project"
+                      dependencies={['gitlab_base_url']}
+                      rules={[
+                        { required: true, message: '请输入项目 Slug' },
+                        ({ getFieldValue }) => ({
+                          validator(_, value) {
+                            const gitlabUrl = getFieldValue('gitlab_base_url');
+                            if (gitlabUrl && !value) {
+                              return Promise.reject(new Error('填写 GitLab URL 时必填'));
+                            }
+                            if (value && !gitlabUrl) {
+                              return Promise.reject(new Error('请同时填写 GitLab URL'));
+                            }
+                            return Promise.resolve();
+                          },
+                        }),
+                      ]}
+                    >
+                      <Input placeholder="group/project" />
+                    </Form.Item>
+
+                    <Form.Item
+                      label="项目名称"
+                      name="project_name"
+                      tooltip="兼容旧方式，建议使用上面的 GitLab URL + Slug"
+                      rules={[{ required: true, message: '请输入项目名称' }]}
+                    >
+                      <Input placeholder="项目名称" />
+                    </Form.Item>
+
+                    <Form.Item
+                      label="URL Slug"
+                      name="url_slug"
+                      tooltip="兼容旧方式，建议使用上面的 GitLab URL + Slug"
+                    >
+                      <Input placeholder="url-slug" />
+                    </Form.Item>
+                  </div>
+                ),
+              },
+              {
+                key: 'notification',
+                label: '🔔 通知配置',
+                children: (
+                  <div style={{ padding: '8px 0' }}>
+                    <Form.Item label="钉钉 Webhook URL" name="dingtalk_url">
+                      <Input.TextArea rows={2} placeholder="钉钉机器人 Webhook URL" />
+                    </Form.Item>
+
+                    <Form.Item 
+                      label="启用钉钉通知" 
+                      name="dingtalk_enabled" 
+                      valuePropName="checked"
+                      tooltip="开启后将发送钉钉通知"
+                    >
+                      <Switch />
+                    </Form.Item>
+
+                    <Form.Item label="飞书 Webhook URL" name="feishu_url">
+                      <Input.TextArea rows={2} placeholder="飞书机器人 Webhook URL" />
+                    </Form.Item>
+
+                    <Form.Item 
+                      label="启用飞书通知" 
+                      name="feishu_enabled" 
+                      valuePropName="checked"
+                      tooltip="开启后将发送飞书通知"
+                    >
+                      <Switch />
+                    </Form.Item>
+
+                    <Form.Item label="企业微信 Webhook URL" name="wecom_url">
+                      <Input.TextArea rows={2} placeholder="企业微信机器人 Webhook URL" />
+                    </Form.Item>
+
+                    <Form.Item 
+                      label="启用企业微信通知" 
+                      name="wecom_enabled" 
+                      valuePropName="checked"
+                      tooltip="开启后将发送企业微信通知"
+                    >
+                      <Switch />
+                    </Form.Item>
+                  </div>
+                ),
+              },
+              {
+                key: 'advanced',
+                label: '⚙️ 高级配置',
+                children: (
+                  <div style={{ padding: '8px 0' }}>
+                    <Form.Item label="自定义系统 Prompt" name="custom_prompt_system">
+                      <Input.TextArea rows={3} placeholder="自定义系统提示词" />
+                    </Form.Item>
+
+                    <Form.Item label="自定义用户 Prompt" name="custom_prompt_user">
+                      <Input.TextArea rows={3} placeholder="自定义用户提示词" />
+                    </Form.Item>
+
+                    <Form.Item label="GitLab Token" name="gitlab_token">
+                      <Input.Password placeholder="GitLab Personal Access Token" />
+                    </Form.Item>
+
+                    <Form.Item 
+                      label="评审风格" 
+                      name="review_style" 
+                      tooltip="选择代码评审的风格，随机风格会从四种风格中随机选择"
+                    >
+                      <Select 
+                        placeholder="选择评审风格" 
+                        allowClear
+                        options={[
+                          { label: '专业风格', value: 'professional' },
+                          { label: '讽刺风格', value: 'sarcastic' },
+                          { label: '温和风格', value: 'gentle' },
+                          { label: '幽默风格', value: 'humorous' },
+                          { label: '🎲 随机风格', value: 'random' },
+                        ]}
+                      />
+                    </Form.Item>
+                  </div>
+                ),
               },
             ]}
-          >
-            <Input placeholder="https://gitlab.com" />
-          </Form.Item>
+          />
 
-          <Form.Item
-            label="项目 Slug"
-            name="project_slug"
-            tooltip="如 group/project"
-            dependencies={['gitlab_base_url']}
-            rules={[
-              { required: true, message: '请输入项目 Slug' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  const gitlabUrl = getFieldValue('gitlab_base_url');
-                  if (gitlabUrl && !value) {
-                    return Promise.reject(new Error('填写 GitLab URL 时必填'));
-                  }
-                  if (value && !gitlabUrl) {
-                    return Promise.reject(new Error('请同时填写 GitLab URL'));
-                  }
-                  return Promise.resolve();
-                },
-              }),
-            ]}
-          >
-            <Input placeholder="group/project" />
-          </Form.Item>
-
-          <Form.Item
-            label="项目名称"
-            name="project_name"
-            tooltip="兼容旧方式，建议使用上面的 GitLab URL + Slug"
-            rules={[{ required: true, message: '请输入项目名称' }]}
-          >
-            <Input placeholder="项目名称" />
-          </Form.Item>
-
-          <Form.Item
-            label="URL Slug"
-            name="url_slug"
-            tooltip="兼容旧方式，建议使用上面的 GitLab URL + Slug"
-          >
-            <Input placeholder="url-slug" />
-          </Form.Item>
-
-          <Form.Item label="钉钉 Webhook URL" name="dingtalk_url">
-            <Input.TextArea rows={2} placeholder="钉钉机器人 Webhook URL" />
-          </Form.Item>
-
-          <Form.Item 
-            label="启用钉钉通知" 
-            name="dingtalk_enabled" 
-            valuePropName="checked"
-            tooltip="开启后将发送钉钉通知"
-          >
-            <Switch />
-          </Form.Item>
-
-          <Form.Item label="飞书 Webhook URL" name="feishu_url">
-            <Input.TextArea rows={2} placeholder="飞书机器人 Webhook URL" />
-          </Form.Item>
-
-          <Form.Item 
-            label="启用飞书通知" 
-            name="feishu_enabled" 
-            valuePropName="checked"
-            tooltip="开启后将发送飞书通知"
-          >
-            <Switch />
-          </Form.Item>
-
-          <Form.Item label="企业微信 Webhook URL" name="wecom_url">
-            <Input.TextArea rows={2} placeholder="企业微信机器人 Webhook URL" />
-          </Form.Item>
-
-          <Form.Item 
-            label="启用企业微信通知" 
-            name="wecom_enabled" 
-            valuePropName="checked"
-            tooltip="开启后将发送企业微信通知"
-          >
-            <Switch />
-          </Form.Item>
-
-          <Form.Item label="自定义系统 Prompt" name="custom_prompt_system">
-            <Input.TextArea rows={3} placeholder="自定义系统提示词" />
-          </Form.Item>
-
-          <Form.Item label="自定义用户 Prompt" name="custom_prompt_user">
-            <Input.TextArea rows={3} placeholder="自定义用户提示词" />
-          </Form.Item>
-
-          <Form.Item label="GitLab Token" name="gitlab_token">
-            <Input.Password placeholder="GitLab Personal Access Token" />
-          </Form.Item>
-
-          <Form.Item 
-            label="评审风格" 
-            name="review_style" 
-            tooltip="选择代码评审的风格，随机风格会从四种风格中随机选择"
-          >
-            <Select 
-              placeholder="选择评审风格" 
-              allowClear
-              options={[
-                { label: '专业风格', value: 'professional' },
-                { label: '讽刺风格', value: 'sarcastic' },
-                { label: '温和风格', value: 'gentle' },
-                { label: '幽默风格', value: 'humorous' },
-                { label: '🎲 随机风格', value: 'random' },
-              ]}
-            />
-          </Form.Item>
-
-          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right', marginTop: 24 }}>
             <Button style={{ marginRight: 8 }} onClick={() => setModalVisible(false)}>
               取消
             </Button>
