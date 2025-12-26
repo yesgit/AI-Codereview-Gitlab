@@ -13,7 +13,7 @@ from biz.utils.db import init_db
 from biz.utils.log import logger
 from biz.api.routes.daily_report import daily_report_task
 
-from api.routers import auth, webhooks, branch_webhooks, reviews, webhook_handler
+from api.routers import auth, webhooks, branch_webhooks, reviews, webhook_handler, config
 
 
 @asynccontextmanager
@@ -47,6 +47,7 @@ app.add_middleware(
 # 注册路由（按注册顺序，精确路由优先）
 # 必须在通配符路由之前注册精确路由
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
+app.include_router(config.router, prefix="/api/v1/config", tags=["配置"])
 app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["项目配置"])
 app.include_router(branch_webhooks.router, prefix="/api/v1/branch-webhooks", tags=["分支配置"])
 app.include_router(reviews.router, prefix="/api/v1/reviews", tags=["查询统计"])

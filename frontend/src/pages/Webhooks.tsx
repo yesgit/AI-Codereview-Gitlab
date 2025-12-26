@@ -1,14 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Popconfirm, Switch, Select } from 'antd';
+import { Table, Button, Modal, Form, Input, message, Popconfirm, Switch, Select, Tooltip } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { webhookApi } from '@/api/webhooks';
 import type { Webhook, WebhookForm } from '@/types';
+
+interface DefaultPrompts {
+  custom_prompt_system: string;
+  custom_prompt_user: string;
+}
 
 const Webhooks: React.FC = () => {
   const [data, setData] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<Webhook | null>(null);
+  const [defaultPrompts, setDefaultPrompts] = useState<DefaultPrompts | null>(null);
   const [form] = Form.useForm();
 
   const fetchData = async () => {
@@ -23,13 +29,30 @@ const Webhooks: React.FC = () => {
     }
   };
 
+  const fetchDefaultPrompts = async () => {
+    try {
+      const response = await webhookApi.getDefaultPrompts();
+      setDefaultPrompts(response);
+    } catch (error) {
+      console.error('Failed to fetch default prompts:', error);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchDefaultPrompts();
   }, []);
 
   const handleCreate = () => {
     setEditingRecord(null);
     form.resetFields();
+    // 加载默认提示词
+    if (defaultPrompts) {
+      form.setFieldsValue({
+        custom_prompt_system: defaultPrompts.custom_prompt_system,
+        custom_prompt_user: defaultPrompts.custom_prompt_user,
+      });
+    }
     setModalVisible(true);
   };
 
@@ -70,87 +93,107 @@ const Webhooks: React.FC = () => {
       title: 'ID', 
       dataIndex: 'id', 
       key: 'id', 
-      width: 60 
+      width: 50,
+      hidden: false,
     },
     { 
       title: 'GitLab URL', 
       dataIndex: 'gitlab_base_url', 
       key: 'gitlab_base_url',
-      width: 180,
+      width: 150,
       ellipsis: true,
+      hidden: false,
+      render: (url: string) => (
+        <Tooltip title={url}>
+          <span style={{ fontSize: '12px' }}>{url || '-'}</span>
+        </Tooltip>
+      ),
     },
     { 
       title: '项目 Slug', 
       dataIndex: 'project_slug', 
       key: 'project_slug',
-      width: 150,
+      width: 130,
       ellipsis: true,
+      hidden: false,
+      render: (slug: string) => (
+        <Tooltip title={slug}>
+          <span style={{ fontSize: '12px' }}>{slug || '-'}</span>
+        </Tooltip>
+      ),
     },
     { 
       title: '项目名称', 
       dataIndex: 'project_name', 
       key: 'project_name',
-      width: 150,
+      width: 120,
+      hidden: false,
+      ellipsis: true,
     },
     { 
       title: 'URL Slug', 
       dataIndex: 'url_slug', 
       key: 'url_slug',
-      width: 120,
+      width: 100,
+      ellipsis: true,
+      hidden: true, // 默认隐藏，可在响应式逻辑中控制显示
+      render: (slug: string) => (
+        <Tooltip title={slug}>
+          <span style={{ fontSize: '12px' }}>{slug || '-'}</span>
+        </Tooltip>
+      ),
     },
     { 
-      title: '钉钉 Webhook', 
+      title: '钉钉', 
       dataIndex: 'dingtalk_url', 
       key: 'dingtalk_url',
-      width: 120,
+      width: 70,
+      hidden: true, // 响应式隐藏
       ellipsis: true,
-    },
-    { 
-      title: '钉钉启用', 
-      dataIndex: 'dingtalk_enabled', 
-      key: 'dingtalk_enabled',
-      width: 80,
-      render: (enabled: boolean) => (
-        <Switch checked={enabled} disabled size="small" />
+      render: (url: string, record: Webhook) => (
+        <Tooltip title={url}>
+          <span style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {record.dingtalk_enabled ? '✓' : '✗'}
+          </span>
+        </Tooltip>
       ),
     },
     { 
-      title: '飞书 Webhook', 
+      title: '飞书', 
       dataIndex: 'feishu_url', 
       key: 'feishu_url',
-      width: 120,
+      width: 70,
+      hidden: true, // 响应式隐藏
       ellipsis: true,
-    },
-    { 
-      title: '飞书启用', 
-      dataIndex: 'feishu_enabled', 
-      key: 'feishu_enabled',
-      width: 80,
-      render: (enabled: boolean) => (
-        <Switch checked={enabled} disabled size="small" />
+      render: (url: string, record: Webhook) => (
+        <Tooltip title={url}>
+          <span style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {record.feishu_enabled ? '✓' : '✗'}
+          </span>
+        </Tooltip>
       ),
     },
     { 
-      title: '企业微信 Webhook', 
+      title: '企业微信', 
       dataIndex: 'wecom_url', 
       key: 'wecom_url',
-      width: 120,
+      width: 70,
+      hidden: true, // 响应式隐藏
       ellipsis: true,
-    },
-    { 
-      title: '企业微信启用', 
-      dataIndex: 'wecom_enabled', 
-      key: 'wecom_enabled',
-      width: 90,
-      render: (enabled: boolean) => (
-        <Switch checked={enabled} disabled size="small" />
+      render: (url: string, record: Webhook) => (
+        <Tooltip title={url}>
+          <span style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {record.wecom_enabled ? '✓' : '✗'}
+          </span>
+        </Tooltip>
       ),
     },
     {
       title: '评审风格',
       dataIndex: 'review_style',
       key: 'review_style',
-      width: 90,
+      width: 80,
+      hidden: false,
       render: (style: string) => {
         const styleMap: Record<string, string> = {
           'professional': '专业',
@@ -158,13 +201,15 @@ const Webhooks: React.FC = () => {
           'gentle': '温和',
           'humorous': '幽默',
         };
-        return styleMap[style] || '默认';
+        return <Tooltip title={style}>{styleMap[style] || '默认'}</Tooltip>;
       },
     },
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 100,
+      fixed: 'right' as const,
+      hidden: false,
       render: (_: any, record: Webhook) => (
         <span>
           <Button
@@ -204,12 +249,13 @@ const Webhooks: React.FC = () => {
       </div>
 
       <Table
-        columns={columns}
+        columns={columns.filter(col => !col.hidden)}
         dataSource={data}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 20 }}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 'max-content' }}
+        size="small"
       />
 
       <Modal

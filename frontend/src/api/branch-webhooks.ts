@@ -13,4 +13,7 @@ export const branchWebhookApi = {
   
   delete: (id: number) => 
     request.delete(`/branch-webhooks/${id}`),
+  
+  getDefaultPrompts: () => 
+    request.get<{custom_prompt_system: string; custom_prompt_user: string}>('/config/default-prompts'),
 };
