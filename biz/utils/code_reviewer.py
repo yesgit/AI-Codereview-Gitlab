@@ -1,5 +1,6 @@
 import abc
 import os
+import random
 import re
 from typing import Dict, Any, List, Optional
 
@@ -9,6 +10,29 @@ from jinja2 import Template
 from biz.llm.factory import Factory
 from biz.utils.log import logger
 from biz.utils.token_util import count_tokens, truncate_text_by_tokens
+
+# 定义有效的评审风格列表
+VALID_REVIEW_STYLES = ['professional', 'sarcastic', 'gentle', 'humorous']
+
+
+def resolve_random_style(style: Optional[str]) -> str:
+    """
+    解析评审风格，如果是 'random' 则随机选择一个具体风格
+    
+    Args:
+        style: 评审风格，可能是 'random' 或具体风格
+        
+    Returns:
+        str: 解析后的具体风格名称
+    """
+    if not style:
+        style = os.getenv("REVIEW_STYLE", "professional")
+    
+    if style == 'random':
+        style = random.choice(VALID_REVIEW_STYLES)
+        logger.info(f"随机评审风格已选择: {style}")
+    
+    return style
 
 
 class BaseReviewer(abc.ABC):
@@ -22,10 +46,7 @@ class BaseReviewer(abc.ABC):
         self, prompt_key: str, style: Optional[str] = None, prompt_templates_file: Optional[str] = None
     ) -> Dict[str, Any]:
         """加载提示词配置"""
-        if not style:
-            # 如果未提供, 从环境变量中获取审查风格，默认为 "professional"
-            style = os.getenv("REVIEW_STYLE", "professional")
-        
+        style = resolve_random_style(style)
         logger.info(f"使用评审风格: {style}")
 
         if not prompt_templates_file:
@@ -116,7 +137,7 @@ class CodeReviewer(BaseReviewer):
                     
                     # 获取自定义 prompt
                     if branch_config.get('custom_prompt_system') and branch_config.get('custom_prompt_user'):
-                        style = review_style or os.getenv("REVIEW_STYLE", "professional")
+                        style = resolve_random_style(review_style)
                         
                         def render_template(template_str: str) -> str:
                             return Template(template_str).render(style=style)
@@ -143,7 +164,7 @@ class CodeReviewer(BaseReviewer):
                     
                     # 获取自定义 prompt
                     if not prompts and mapping.get('custom_prompt_system') and mapping.get('custom_prompt_user'):
-                        style = review_style or os.getenv("REVIEW_STYLE", "professional")
+                        style = resolve_random_style(review_style)
                         
                         def render_template(template_str: str) -> str:
                             return Template(template_str).render(style=style)

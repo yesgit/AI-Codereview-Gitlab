@@ -200,6 +200,7 @@ const Webhooks: React.FC = () => {
           'sarcastic': '讽刺',
           'gentle': '温和',
           'humorous': '幽默',
+          'random': '随机',
         };
         return <Tooltip title={style}>{styleMap[style] || '默认'}</Tooltip>;
       },
@@ -388,7 +389,7 @@ const Webhooks: React.FC = () => {
           <Form.Item 
             label="评审风格" 
             name="review_style" 
-            tooltip="选择代码评审的风格，如不选择则使用默认风格"
+            tooltip="选择代码评审的风格，随机风格会从四种风格中随机选择"
           >
             <Select 
               placeholder="选择评审风格" 
@@ -398,6 +399,7 @@ const Webhooks: React.FC = () => {
                 { label: '讽刺风格', value: 'sarcastic' },
                 { label: '温和风格', value: 'gentle' },
                 { label: '幽默风格', value: 'humorous' },
+                { label: '🎲 随机风格', value: 'random' },
               ]}
             />
           </Form.Item>

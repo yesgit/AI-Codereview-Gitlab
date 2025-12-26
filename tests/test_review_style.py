@@ -3,8 +3,10 @@
 验证每个项目、分支可以设置自己的评审风格
 """
 import pytest
+import os
 from unittest.mock import patch, MagicMock
 from biz.service.branch_webhook_service import BranchWebhookService
+from biz.utils.code_reviewer import VALID_REVIEW_STYLES, resolve_random_style
 
 
 class TestReviewStyleInBranchWebhook:
@@ -83,7 +85,7 @@ class TestReviewStyleInBranchWebhook:
 class TestValidReviewStyles:
     """测试有效的 review_style 值"""
     
-    valid_styles = ['professional', 'sarcastic', 'gentle', 'humorous']
+    valid_styles = ['professional', 'sarcastic', 'gentle', 'humorous', 'random']
     
     @pytest.mark.parametrize('style', valid_styles)
     @patch('biz.service.branch_webhook_service.get_engine')
@@ -105,6 +107,107 @@ class TestValidReviewStyles:
         )
         
         assert result is not None
+
+
+class TestRandomReviewStyle:
+    """测试随机评审风格功能"""
+    
+    def test_valid_review_styles_constant(self):
+        """测试 VALID_REVIEW_STYLES 常量包含所有预期风格"""
+        expected_styles = ['professional', 'sarcastic', 'gentle', 'humorous']
+        assert VALID_REVIEW_STYLES == expected_styles
+    
+    @patch('biz.utils.code_reviewer.random.choice')
+    def test_resolve_random_style_with_random(self, mock_choice):
+        """测试 resolve_random_style 遇到 'random' 时会调用 random.choice"""
+        mock_choice.return_value = 'sarcastic'
+        result = resolve_random_style('random')
+        assert result == 'sarcastic'
+        mock_choice.assert_called_once_with(VALID_REVIEW_STYLES)
+    
+    def test_resolve_random_style_with_specific_style(self):
+        """测试 resolve_random_style 遇到具体风格时直接返回"""
+        result = resolve_random_style('professional')
+        assert result == 'professional'
+    
+    @patch.dict(os.environ, {'REVIEW_STYLE': 'gentle'})
+    def test_resolve_random_style_with_none(self):
+        """测试 resolve_random_style 遇到 None 时使用环境变量"""
+        result = resolve_random_style(None)
+        assert result == 'gentle'
+    
+    @patch.dict(os.environ, {}, clear=True)
+    def test_resolve_random_style_default(self):
+        """测试 resolve_random_style 没有环境变量时使用默认值"""
+        result = resolve_random_style(None)
+        assert result == 'professional'
+    
+    @patch('biz.utils.code_reviewer.random.choice')
+    @patch('biz.utils.code_reviewer.open')
+    @patch('biz.utils.code_reviewer.yaml.safe_load')
+    @patch('biz.utils.code_reviewer.Factory')
+    def test_random_style_selects_valid_style(self, mock_factory, mock_yaml_load, mock_open, mock_random_choice):
+        """测试随机风格会从有效风格列表中选择一个"""
+        from biz.utils.code_reviewer import CodeReviewer
+        
+        # 模拟 LLM client
+        mock_client = MagicMock()
+        mock_factory.return_value.getClient.return_value = mock_client
+        
+        # 模拟随机选择返回 'sarcastic'
+        mock_random_choice.return_value = 'sarcastic'
+        
+        # 模拟 YAML 文件内容
+        mock_yaml_load.return_value = {
+            "code_review_prompt": {
+                "system_prompt": "你是一位资深的软件开发工程师。整个评论要保持{{ style }}风格",
+                "user_prompt": "以下是代码变更：{diffs_text}"
+            }
+        }
+        
+        # 创建 CodeReviewer 实例，传入 random 风格（通过设置环境变量）
+        import os
+        os.environ['REVIEW_STYLE'] = 'random'
+        reviewer = CodeReviewer()
+        
+        # 验证 random.choice 被调用，参数是 VALID_REVIEW_STYLES
+        mock_random_choice.assert_called_once_with(VALID_REVIEW_STYLES)
+        
+        # 验证最终的提示词中包含随机选择的风格
+        assert 'sarcastic' in reviewer.prompts['system_message']['content']
+    
+    @patch('biz.utils.code_reviewer.random.choice')
+    @patch('biz.utils.code_reviewer.open')
+    @patch('biz.utils.code_reviewer.yaml.safe_load')
+    @patch('biz.utils.code_reviewer.Factory')
+    def test_random_style_is_replaced_in_prompt(self, mock_factory, mock_yaml_load, mock_open, mock_random_choice):
+        """测试随机风格会被正确替换到提示词中"""
+        from biz.utils.code_reviewer import CodeReviewer
+        
+        # 模拟 LLM client
+        mock_client = MagicMock()
+        mock_factory.return_value.getClient.return_value = mock_client
+        
+        # 模拟随机选择返回 'humorous'
+        mock_random_choice.return_value = 'humorous'
+        
+        # 模拟 YAML 文件内容
+        mock_yaml_load.return_value = {
+            "code_review_prompt": {
+                "system_prompt": "整个评论要保持{{ style }}风格",
+                "user_prompt": "以下是代码变更：{diffs_text}"
+            }
+        }
+        
+        # 创建 CodeReviewer 实例，传入 random 风格（通过设置环境变量）
+        import os
+        os.environ['REVIEW_STYLE'] = 'random'
+        reviewer = CodeReviewer()
+        
+        # 验证提示词中的 {{ style }} 被 'humorous' 替换
+        system_content = reviewer.prompts['system_message']['content']
+        assert 'humorous' in system_content
+        assert '{{ style }}' not in system_content
 
 
 if __name__ == '__main__':

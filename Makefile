@@ -6,7 +6,7 @@
 #   make clean-images     # remove local images built by this Makefile
 
 IMAGE_PREFIX ?= docker.io/hedw
-VERSION ?= 1.4.11
+VERSION ?= 1.4.12
 PLATFORM ?= linux/amd64
 
 # Nexus registry prefix for push
@@ -33,6 +33,33 @@ clean-images:
 	@echo "删除本地构建的镜像"
 	-docker rmi $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION) || true
 	-docker rmi $(IMAGE_PREFIX)/ai-codereview-gitlab:$(VERSION)-worker || true
+
+# 启动应用（构建并运行）
+.PHONY: up
+
+up:
+	@echo "启动应用: docker compose up -d --build"
+	docker compose up -d --build
+
+# 停止应用
+.PHONY: down
+
+down:
+	@echo "停止应用: docker compose down"
+	docker compose down
+
+# 重启应用
+.PHONY: restart
+
+restart:
+	@echo "重启应用: docker compose restart"
+	docker compose restart
+
+# 查看日志
+.PHONY: logs
+
+logs:
+	docker compose logs -f
 
 # 推送镜像到注册表
 .PHONY: push push-app push-worker
