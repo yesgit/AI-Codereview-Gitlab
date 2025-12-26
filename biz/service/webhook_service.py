@@ -37,6 +37,7 @@ class WebhookService:
                 Column('feishu_enabled', Boolean, default=True),
                 Column('wecom_enabled', Boolean, default=True),
                 Column('review_style', String(50)),
+                Column('daily_report_enabled', Boolean, default=True),
                 Column('created_at', Integer),
                 Column('updated_at', Integer),
             )
@@ -51,7 +52,8 @@ class WebhookService:
                                          wecom_url: Optional[str] = None, custom_prompt_system: Optional[str] = None,
                                          custom_prompt_user: Optional[str] = None, gitlab_token: Optional[str] = None,
                                          dingtalk_enabled: Optional[bool] = None, feishu_enabled: Optional[bool] = None,
-                                         wecom_enabled: Optional[bool] = None, review_style: Optional[str] = None):
+                                         wecom_enabled: Optional[bool] = None, review_style: Optional[str] = None,
+                                         daily_report_enabled: Optional[bool] = None):
         try:
             now = int(time.time())
             engine = get_engine()
@@ -59,10 +61,10 @@ class WebhookService:
             sel_by_project = text('SELECT id, project_name, url_slug FROM project_webhooks WHERE project_name = :project_name LIMIT 1')
             sel_by_slug = text('SELECT id, project_name, url_slug FROM project_webhooks WHERE url_slug = :url_slug LIMIT 1')
             sel_by_gitlab = text('SELECT id, project_name, url_slug FROM project_webhooks WHERE gitlab_base_url = :gitlab_base_url AND project_slug = :project_slug LIMIT 1')
-            ins = text('''INSERT INTO project_webhooks (project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, custom_prompt_system, custom_prompt_user, gitlab_token, dingtalk_enabled, feishu_enabled, wecom_enabled, review_style, created_at, updated_at)
-                         VALUES (:project_name, :url_slug, :gitlab_base_url, :project_slug, :dingtalk_url, :feishu_url, :wecom_url, :custom_prompt_system, :custom_prompt_user, :gitlab_token, :dingtalk_enabled, :feishu_enabled, :wecom_enabled, :review_style, :created_at, :updated_at)''')
-            upd = text('''UPDATE project_webhooks SET project_name = :project_name, url_slug = :url_slug, gitlab_base_url = :gitlab_base_url, project_slug = :project_slug, dingtalk_url = :dingtalk_url, feishu_url = :feishu_url, wecom_url = :wecom_url, custom_prompt_system = :custom_prompt_system, custom_prompt_user = :custom_prompt_user, gitlab_token = :gitlab_token, dingtalk_enabled = :dingtalk_enabled, feishu_enabled = :feishu_enabled, wecom_enabled = :wecom_enabled, review_style = :review_style, updated_at = :updated_at WHERE id = :id''')
-            sel_by_id = text('SELECT id, project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, gitlab_token, created_at, updated_at FROM project_webhooks WHERE id = :id LIMIT 1')
+            ins = text('''INSERT INTO project_webhooks (project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, custom_prompt_system, custom_prompt_user, gitlab_token, dingtalk_enabled, feishu_enabled, wecom_enabled, review_style, daily_report_enabled, created_at, updated_at)
+                         VALUES (:project_name, :url_slug, :gitlab_base_url, :project_slug, :dingtalk_url, :feishu_url, :wecom_url, :custom_prompt_system, :custom_prompt_user, :gitlab_token, :dingtalk_enabled, :feishu_enabled, :wecom_enabled, :review_style, :daily_report_enabled, :created_at, :updated_at)''')
+            upd = text('''UPDATE project_webhooks SET project_name = :project_name, url_slug = :url_slug, gitlab_base_url = :gitlab_base_url, project_slug = :project_slug, dingtalk_url = :dingtalk_url, feishu_url = :feishu_url, wecom_url = :wecom_url, custom_prompt_system = :custom_prompt_system, custom_prompt_user = :custom_prompt_user, gitlab_token = :gitlab_token, dingtalk_enabled = :dingtalk_enabled, feishu_enabled = :feishu_enabled, wecom_enabled = :wecom_enabled, review_style = :review_style, daily_report_enabled = :daily_report_enabled, updated_at = :updated_at WHERE id = :id''')
+            sel_by_id = text('SELECT id, project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, gitlab_token, created_at, updated_at FROM project_webhooks WHERE id = :id LIMIT 1')
             
             with engine.begin() as conn:
                 existing_project = None
@@ -111,7 +113,7 @@ class WebhookService:
                         'feishu_url': feishu_url, 'wecom_url': wecom_url,
                         'custom_prompt_system': custom_prompt_system, 'custom_prompt_user': custom_prompt_user,
                         'gitlab_token': gitlab_token, 'dingtalk_enabled': dingtalk_enabled, 'feishu_enabled': feishu_enabled,
-                        'wecom_enabled': wecom_enabled, 'review_style': review_style, 'updated_at': now, 'id': mapping_id
+                        'wecom_enabled': wecom_enabled, 'review_style': review_style, 'daily_report_enabled': daily_report_enabled, 'updated_at': now, 'id': mapping_id
                     })
                 else:
                     # safe to insert
@@ -121,7 +123,7 @@ class WebhookService:
                         'feishu_url': feishu_url, 'wecom_url': wecom_url,
                         'custom_prompt_system': custom_prompt_system, 'custom_prompt_user': custom_prompt_user,
                         'gitlab_token': gitlab_token, 'dingtalk_enabled': dingtalk_enabled, 'feishu_enabled': feishu_enabled,
-                        'wecom_enabled': wecom_enabled, 'review_style': review_style, 'created_at': now, 'updated_at': now
+                        'wecom_enabled': wecom_enabled, 'review_style': review_style, 'daily_report_enabled': daily_report_enabled, 'created_at': now, 'updated_at': now
                     })
                     mapping_id = result.lastrowid
 
@@ -150,7 +152,7 @@ class WebhookService:
     def get_webhook_mapping(project_name: Optional[str] = None, url_slug: Optional[str] = None):
         try:
             engine = get_engine()
-            sql = text('''SELECT id, project_name, url_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style FROM project_webhooks
+            sql = text('''SELECT id, project_name, url_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled FROM project_webhooks
                           WHERE project_name = :project_name OR url_slug = :url_slug LIMIT 1''')
             with engine.connect() as conn:
                 res = conn.execute(sql, {'project_name': project_name, 'url_slug': url_slug})
@@ -167,7 +169,7 @@ class WebhookService:
     def get_all_webhook_mappings():
         try:
             engine = get_engine()
-            sql = text('SELECT id, project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, gitlab_token, created_at, updated_at FROM project_webhooks')
+            sql = text('SELECT id, project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, gitlab_token, created_at, updated_at FROM project_webhooks')
             with engine.connect() as conn:
                 res = conn.execute(sql)
                 rows = [dict(r) for r in res.mappings().all()]
@@ -184,7 +186,7 @@ class WebhookService:
                                      custom_prompt_system: Optional[str] = None, custom_prompt_user: Optional[str] = None,
                                      gitlab_token: Optional[str] = None, dingtalk_enabled: Optional[bool] = None,
                                      feishu_enabled: Optional[bool] = None, wecom_enabled: Optional[bool] = None,
-                                     review_style: Optional[str] = None):
+                                     review_style: Optional[str] = None, daily_report_enabled: Optional[bool] = None):
         try:
             now = int(time.time())
             engine = get_engine()
@@ -194,7 +196,7 @@ class WebhookService:
                          dingtalk_url = :dingtalk_url, feishu_url = :feishu_url, wecom_url = :wecom_url,
                          dingtalk_enabled = :dingtalk_enabled, feishu_enabled = :feishu_enabled, wecom_enabled = :wecom_enabled,
                          custom_prompt_system = :custom_prompt_system, custom_prompt_user = :custom_prompt_user,
-                         gitlab_token = :gitlab_token, review_style = :review_style, updated_at = :updated_at WHERE id = :id''')
+                         gitlab_token = :gitlab_token, review_style = :review_style, daily_report_enabled = :daily_report_enabled, updated_at = :updated_at WHERE id = :id''')
             with engine.begin() as conn:
                 res = conn.execute(sel, {'id': mapping_id})
                 row = res.mappings().first()
@@ -206,7 +208,7 @@ class WebhookService:
                     'dingtalk_url': dingtalk_url, 'feishu_url': feishu_url, 'wecom_url': wecom_url,
                     'dingtalk_enabled': dingtalk_enabled, 'feishu_enabled': feishu_enabled, 'wecom_enabled': wecom_enabled,
                     'custom_prompt_system': custom_prompt_system, 'custom_prompt_user': custom_prompt_user,
-                    'gitlab_token': gitlab_token, 'review_style': review_style, 'updated_at': now, 'id': mapping_id
+                    'gitlab_token': gitlab_token, 'review_style': review_style, 'daily_report_enabled': daily_report_enabled, 'updated_at': now, 'id': mapping_id
                 })
                 return True
         except Exception as e:
@@ -231,7 +233,7 @@ class WebhookService:
             sql = text('''SELECT id, project_name, url_slug, gitlab_base_url, project_slug,
                                 dingtalk_url, feishu_url, wecom_url,
                                 dingtalk_enabled, feishu_enabled, wecom_enabled,
-                                custom_prompt_system, custom_prompt_user, review_style, gitlab_token
+                                custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, gitlab_token
                          FROM project_webhooks
                          WHERE gitlab_base_url = :gitlab_base_url
                          AND project_slug = :project_slug
@@ -282,7 +284,8 @@ class WebhookService:
             'wecom_enabled': os.environ.get('WECOM_ENABLED', '0') == '1',
             'custom_prompt_system': os.environ.get('CUSTOM_PROMPT_SYSTEM', ''),
             'custom_prompt_user': os.environ.get('CUSTOM_PROMPT_USER', ''),
-            'gitlab_token': os.environ.get('GITLAB_TOKEN', '')
+            'gitlab_token': os.environ.get('GITLAB_TOKEN', ''),
+            'daily_report_enabled': os.environ.get('DAILY_REPORT_ENABLED', '1') == '1'
         }
 
     @staticmethod
@@ -453,6 +456,27 @@ class WebhookService:
             if style_source:
                 logger.debug(f"  review_style: 使用{style_source}配置")
         
+        # Daily Report Enabled: 优先级 分支级 > 项目级 > 系统级
+        daily_report_enabled = True  # 默认启用
+        daily_report_source = None
+        
+        # 尝试从分支级获取
+        if branch_config and branch_config.get('daily_report_enabled') is not None:
+            daily_report_enabled = branch_config.get('daily_report_enabled')
+            daily_report_source = "分支级"
+        # 尝试从项目级获取
+        elif project_config and project_config.get('daily_report_enabled') is not None:
+            daily_report_enabled = project_config.get('daily_report_enabled')
+            daily_report_source = "项目级"
+        # 尝试从系统级获取
+        elif system_config.get('daily_report_enabled') is not None:
+            daily_report_enabled = system_config.get('daily_report_enabled')
+            daily_report_source = "系统级"
+        
+        result_config['daily_report_enabled'] = daily_report_enabled
+        if daily_report_source:
+            logger.debug(f"  daily_report_enabled: 使用{daily_report_source}配置 ({daily_report_enabled})")
+        
         # 记录配置来源摘要
         if branch_config and any(branch_config.get(f) and str(branch_config.get(f)).strip() for f in ['dingtalk_url', 'feishu_url', 'wecom_url', 'custom_prompt_system', 'custom_prompt_user']):
             logger.info(f"✅ 包含分支级配置: {gitlab_base_url}/{project_slug}:{branch_name}")
@@ -471,7 +495,7 @@ class WebhookService:
             sql = text('''SELECT id, gitlab_base_url, project_slug, branch_pattern,
                                 dingtalk_url, feishu_url, wecom_url,
                                 dingtalk_enabled, feishu_enabled, wecom_enabled,
-                                custom_prompt_system, custom_prompt_user, review_style, gitlab_token,
+                                custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, gitlab_token,
                                 created_at, updated_at
                          FROM branch_webhooks
                          ORDER BY gitlab_base_url, project_slug, branch_pattern''')
@@ -490,7 +514,8 @@ class WebhookService:
                                     wecom_url: Optional[str] = None, custom_prompt_system: Optional[str] = None,
                                     custom_prompt_user: Optional[str] = None, gitlab_token: Optional[str] = None,
                                     dingtalk_enabled: Optional[bool] = None, feishu_enabled: Optional[bool] = None,
-                                    wecom_enabled: Optional[bool] = None, review_style: Optional[str] = None):
+                                    wecom_enabled: Optional[bool] = None, review_style: Optional[str] = None,
+                                    daily_report_enabled: Optional[bool] = None):
         """创建分支级webhook配置"""
         try:
             now = int(time.time())
@@ -499,12 +524,12 @@ class WebhookService:
                          (gitlab_base_url, project_slug, branch_pattern,
                           dingtalk_url, feishu_url, wecom_url,
                           dingtalk_enabled, feishu_enabled, wecom_enabled,
-                          custom_prompt_system, custom_prompt_user, review_style, gitlab_token,
+                          custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, gitlab_token,
                           created_at, updated_at)
                          VALUES (:gitlab_base_url, :project_slug, :branch_pattern,
                                 :dingtalk_url, :feishu_url, :wecom_url,
                                 :dingtalk_enabled, :feishu_enabled, :wecom_enabled,
-                                :custom_prompt_system, :custom_prompt_user, :review_style, :gitlab_token,
+                                :custom_prompt_system, :custom_prompt_user, :review_style, :daily_report_enabled, :gitlab_token,
                                 :created_at, :updated_at)''')
             with engine.begin() as conn:
                 conn.execute(sql, {
@@ -520,6 +545,7 @@ class WebhookService:
                     'custom_prompt_system': custom_prompt_system,
                     'custom_prompt_user': custom_prompt_user,
                     'review_style': review_style,
+                    'daily_report_enabled': daily_report_enabled,
                     'gitlab_token': gitlab_token,
                     'created_at': now,
                     'updated_at': now
@@ -537,7 +563,8 @@ class WebhookService:
                                           wecom_url: Optional[str] = None, custom_prompt_system: Optional[str] = None,
                                           custom_prompt_user: Optional[str] = None, gitlab_token: Optional[str] = None,
                                           dingtalk_enabled: Optional[bool] = None, feishu_enabled: Optional[bool] = None,
-                                          wecom_enabled: Optional[bool] = None, review_style: Optional[str] = None):
+                                          wecom_enabled: Optional[bool] = None, review_style: Optional[str] = None,
+                                          daily_report_enabled: Optional[bool] = None):
         """更新分支级webhook配置"""
         try:
             now = int(time.time())
@@ -556,6 +583,7 @@ class WebhookService:
                              custom_prompt_system = :custom_prompt_system,
                              custom_prompt_user = :custom_prompt_user,
                              review_style = :review_style,
+                             daily_report_enabled = :daily_report_enabled,
                              gitlab_token = :gitlab_token,
                              updated_at = :updated_at
                          WHERE id = :id''')
@@ -577,6 +605,7 @@ class WebhookService:
                     'custom_prompt_system': custom_prompt_system,
                     'custom_prompt_user': custom_prompt_user,
                     'review_style': review_style,
+                    'daily_report_enabled': daily_report_enabled,
                     'gitlab_token': gitlab_token,
                     'updated_at': now,
                     'id': config_id

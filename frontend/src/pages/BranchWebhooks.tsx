@@ -361,6 +361,15 @@ const BranchWebhooks: React.FC = () => {
                     >
                       <Switch />
                     </Form.Item>
+
+                    <Form.Item 
+                      label="启用日报" 
+                      name="daily_report_enabled" 
+                      valuePropName="checked"
+                      tooltip="开启后将发送该分支的代码提交日报"
+                    >
+                      <Switch />
+                    </Form.Item>
                   </div>
                 ),
               },

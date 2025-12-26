@@ -26,6 +26,7 @@ class BranchWebhookCreate(BaseModel):
     custom_prompt_user: Optional[str] = None
     review_style: Optional[str] = None
     gitlab_token: Optional[str] = None
+    daily_report_enabled: Optional[bool] = None
 
 
 class BranchWebhookUpdate(BaseModel):
@@ -42,6 +43,7 @@ class BranchWebhookUpdate(BaseModel):
     custom_prompt_user: Optional[str] = None
     review_style: Optional[str] = None
     gitlab_token: Optional[str] = None
+    daily_report_enabled: Optional[bool] = None
 
 
 class BranchWebhookResponse(BaseModel):
@@ -59,6 +61,7 @@ class BranchWebhookResponse(BaseModel):
     custom_prompt_user: Optional[str] = None
     review_style: Optional[str] = None
     gitlab_token: Optional[str] = None
+    daily_report_enabled: Optional[bool] = None
     created_at: Optional[int] = None
     updated_at: Optional[int] = None
 
@@ -110,7 +113,8 @@ async def create_branch_webhook(webhook: BranchWebhookCreate, current_user: str 
         custom_prompt_system=webhook.custom_prompt_system,
         custom_prompt_user=webhook.custom_prompt_user,
         review_style=webhook.review_style,
-        gitlab_token=webhook.gitlab_token
+        gitlab_token=webhook.gitlab_token,
+        daily_report_enabled=webhook.daily_report_enabled
     )
     
     if not result:
@@ -169,7 +173,8 @@ async def update_branch_webhook(config_id: int, webhook: BranchWebhookUpdate, cu
         custom_prompt_system=webhook.custom_prompt_system,
         custom_prompt_user=webhook.custom_prompt_user,
         review_style=webhook.review_style,
-        gitlab_token=webhook.gitlab_token
+        gitlab_token=webhook.gitlab_token,
+        daily_report_enabled=webhook.daily_report_enabled
     )
     
     if not result:

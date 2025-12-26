@@ -31,6 +31,7 @@ export interface Webhook {
   custom_prompt_user?: string;
   review_style?: string;
   gitlab_token?: string;
+  daily_report_enabled?: boolean;
   created_at?: number;
   updated_at?: number;
 }
@@ -51,6 +52,7 @@ export interface WebhookForm {
   feishu_enabled?: boolean;
   wecom_enabled?: boolean;
   review_style?: string;
+  daily_report_enabled?: boolean;
 }
 
 export interface BranchWebhook {
@@ -68,6 +70,7 @@ export interface BranchWebhook {
   custom_prompt_user?: string;
   review_style?: string;
   gitlab_token?: string;
+  daily_report_enabled?: boolean;
   created_at?: number;
   updated_at?: number;
 }
@@ -86,6 +89,7 @@ export interface BranchWebhookForm {
   custom_prompt_user?: string;
   review_style?: string;
   gitlab_token?: string;
+  daily_report_enabled?: boolean;
 }
 
 export const ReviewStyleOptions = [

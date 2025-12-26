@@ -35,6 +35,7 @@ class BranchWebhookService:
                 Column('custom_prompt_system', Text),
                 Column('custom_prompt_user', Text),
                 Column('review_style', String(50)),
+                Column('daily_report_enabled', Boolean),
                 Column('created_at', Integer),
                 Column('updated_at', Integer),
                 UniqueConstraint('gitlab_base_url', 'project_slug', 'branch_pattern',
@@ -50,7 +51,7 @@ class BranchWebhookService:
                                        wecom_url: Optional[str] = None, custom_prompt_system: Optional[str] = None,
                                        custom_prompt_user: Optional[str] = None, dingtalk_enabled: Optional[bool] = None,
                                        feishu_enabled: Optional[bool] = None, wecom_enabled: Optional[bool] = None,
-                                       review_style: Optional[str] = None):
+                                       review_style: Optional[str] = None, daily_report_enabled: Optional[bool] = None):
         """
         创建或更新分支级webhook配置
         
@@ -81,16 +82,16 @@ class BranchWebhookService:
             ins = text('''INSERT INTO branch_webhooks
                          (gitlab_base_url, project_slug, branch_pattern, dingtalk_url, feishu_url, wecom_url,
                           dingtalk_enabled, feishu_enabled, wecom_enabled,
-                          custom_prompt_system, custom_prompt_user, review_style, created_at, updated_at)
+                          custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, created_at, updated_at)
                          VALUES (:gitlab_base_url, :project_slug, :branch_pattern, :dingtalk_url, :feishu_url,
                                 :wecom_url, :dingtalk_enabled, :feishu_enabled, :wecom_enabled,
-                                :custom_prompt_system, :custom_prompt_user, :review_style, :created_at, :updated_at)''')
+                                :custom_prompt_system, :custom_prompt_user, :review_style, :daily_report_enabled, :created_at, :updated_at)''')
             
             upd = text('''UPDATE branch_webhooks
                          SET dingtalk_url = :dingtalk_url, feishu_url = :feishu_url, wecom_url = :wecom_url,
                              dingtalk_enabled = :dingtalk_enabled, feishu_enabled = :feishu_enabled, wecom_enabled = :wecom_enabled,
                              custom_prompt_system = :custom_prompt_system, custom_prompt_user = :custom_prompt_user,
-                             review_style = :review_style, updated_at = :updated_at
+                             review_style = :review_style, daily_report_enabled = :daily_report_enabled, updated_at = :updated_at
                          WHERE id = :id''')
             
             with engine.begin() as conn:
@@ -114,6 +115,7 @@ class BranchWebhookService:
                     'custom_prompt_system': custom_prompt_system,
                     'custom_prompt_user': custom_prompt_user,
                     'review_style': review_style,
+                    'daily_report_enabled': daily_report_enabled,
                     'updated_at': now
                 }
                 
@@ -153,7 +155,7 @@ class BranchWebhookService:
             sql = text('''SELECT id, gitlab_base_url, project_slug, branch_pattern,
                                 dingtalk_url, feishu_url, wecom_url,
                                 dingtalk_enabled, feishu_enabled, wecom_enabled,
-                                custom_prompt_system, custom_prompt_user, review_style,
+                                custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled,
                                 created_at, updated_at
                          FROM branch_webhooks
                          WHERE gitlab_base_url = :gitlab_base_url
@@ -205,7 +207,7 @@ class BranchWebhookService:
             sql = text(f'''SELECT id, gitlab_base_url, project_slug, branch_pattern,
                                  dingtalk_url, feishu_url, wecom_url,
                                  dingtalk_enabled, feishu_enabled, wecom_enabled,
-                                 custom_prompt_system, custom_prompt_user, review_style,
+                                 custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled,
                                  created_at, updated_at
                           FROM branch_webhooks
                           WHERE {where_clause}
@@ -280,7 +282,7 @@ class BranchWebhookService:
                                    wecom_url: Optional[str] = None, custom_prompt_system: Optional[str] = None,
                                    custom_prompt_user: Optional[str] = None, dingtalk_enabled: Optional[bool] = None,
                                    feishu_enabled: Optional[bool] = None, wecom_enabled: Optional[bool] = None,
-                                   review_style: Optional[str] = None):
+                                   review_style: Optional[str] = None, daily_report_enabled: Optional[bool] = None):
         """通过ID更新分支级webhook配置"""
         try:
             now = int(time.time())
@@ -293,7 +295,7 @@ class BranchWebhookService:
                              feishu_url = :feishu_url, wecom_url = :wecom_url,
                              dingtalk_enabled = :dingtalk_enabled, feishu_enabled = :feishu_enabled, wecom_enabled = :wecom_enabled,
                              custom_prompt_system = :custom_prompt_system,
-                             custom_prompt_user = :custom_prompt_user, review_style = :review_style, updated_at = :updated_at
+                             custom_prompt_user = :custom_prompt_user, review_style = :review_style, daily_report_enabled = :daily_report_enabled, updated_at = :updated_at
                          WHERE id = :id''')
             
             with engine.begin() as conn:
@@ -316,6 +318,7 @@ class BranchWebhookService:
                     'custom_prompt_system': custom_prompt_system,
                     'custom_prompt_user': custom_prompt_user,
                     'review_style': review_style,
+                    'daily_report_enabled': daily_report_enabled,
                     'updated_at': now,
                     'id': webhook_id
                 })
