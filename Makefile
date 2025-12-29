@@ -6,7 +6,7 @@
 #   make clean-images     # remove local images built by this Makefile
 
 IMAGE_PREFIX ?= docker.io/hedw
-VERSION ?= 1.4.16
+VERSION ?= 1.4.17
 PLATFORM ?= linux/amd64
 
 # Nexus registry prefix for push
@@ -103,3 +103,20 @@ push-nexus-worker:
 	@docker push $(NEXUS_REGISTRY)/ai-codereview-gitlab:$(VERSION)-worker
 
 push-nexus: push-nexus-app push-nexus-worker
+
+# =============== Worker 管理命令 ===============
+.PHONY: scale-worker ps-worker logs-worker
+
+WORKER_COUNT ?= 1
+
+scale-worker:
+	@echo "扩展 Worker 到 $(WORKER_COUNT) 个实例..."
+	docker compose up -d --scale worker=$(WORKER_COUNT)
+	@echo "✅ Worker 已扩展到 $(WORKER_COUNT) 个实例"
+
+ps-worker:
+	@echo "查看 Worker 容器状态:"
+	docker compose ps worker
+
+logs-worker:
+	docker compose logs -f worker

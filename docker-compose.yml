@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: app
-    image: hedw/ai-codereview-gitlab:1.4.16
+    image: hedw/ai-codereview-gitlab:1.4.17
     container_name: ai-codereview-api
     ports:
       - "5002:5001" # FastAPI (serves frontend) - 临时改用 5002 端口避免冲突
@@ -29,8 +29,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    image: hedw/ai-codereview-gitlab:1.4.16-worker
-    container_name: ai-codereview-worker
+    image: hedw/ai-codereview-gitlab:1.4.17-worker
     volumes:
       - ./data:/app/data
       - ./log:/app/log
