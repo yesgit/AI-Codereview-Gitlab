@@ -187,7 +187,7 @@ def detect_os_from_user_agent(user_agent: str) -> str:
     返回值: 'windows' | 'linux' | 'mac' | 'unknown'
     """
     if not user_agent:
-        return 'linux'  # 默认返回 linux（因为 curl 常用于 Unix 系统）
+        return 'windows'  # 默认返回 windows
     
     ua = user_agent.lower()
     
@@ -203,7 +203,7 @@ def detect_os_from_user_agent(user_agent: str) -> str:
     if re.search(r'linux|x11|ubuntu|debian|fedora|curl|wget', ua):
         return 'linux'
     
-    return 'linux'  # 默认返回 linux
+    return 'windows'  # 默认返回 windows
 
 
 # ========== API 端点 ==========

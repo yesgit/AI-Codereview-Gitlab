@@ -254,28 +254,16 @@ class FeishuNotifier:
         """
         根据段落内容创建飞书卡片元素
         
-        对于包含 Markdown 语法的段落（表格、代码块、标题），使用 lark_md
-        对于普通文本段落，使用 plain_text
+        所有内容统一使用 lark_md 格式，确保 markdown 语法能正确渲染
         """
-        # 检查是否包含 Markdown 特殊语法
-        has_markdown = self._has_markdown_syntax(paragraph)
-        
-        if has_markdown:
-            return {
-                "tag": "div",
-                "text": {
-                    "tag": "lark_md",
-                    "content": paragraph
-                }
+        # 所有内容都使用 lark_md 格式，确保 markdown 语法能正确渲染
+        return {
+            "tag": "div",
+            "text": {
+                "tag": "lark_md",
+                "content": paragraph
             }
-        else:
-            return {
-                "tag": "div",
-                "text": {
-                    "tag": "plain_text",
-                    "content": paragraph
-                }
-            }
+        }
     
     def _has_markdown_syntax(self, text):
         """
