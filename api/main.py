@@ -13,7 +13,7 @@ from biz.utils.db import init_db
 from biz.utils.log import logger
 from biz.api.routes.daily_report import daily_report_task
 
-from api.routers import auth, webhooks, branch_webhooks, reviews, webhook_handler, config
+from api.routers import auth, webhooks, branch_webhooks, reviews, webhook_handler, config, local_hooks
 
 
 @asynccontextmanager
@@ -52,6 +52,7 @@ app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["项目配�
 app.include_router(branch_webhooks.router, prefix="/api/v1/branch-webhooks", tags=["分支配置"])
 app.include_router(reviews.router, prefix="/api/v1/reviews", tags=["查询统计"])
 app.include_router(webhook_handler.router, prefix="", tags=["Webhook事件"])  # /review/webhook
+app.include_router(local_hooks.router, prefix="/api/v1", tags=["本地审查Hook"])  # 本地审查功能
 
 # 日报路由必须在 serve_spa 之前注册
 
