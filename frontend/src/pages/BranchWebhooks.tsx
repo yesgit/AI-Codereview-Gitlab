@@ -15,6 +15,7 @@ const BranchWebhooks: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<BranchWebhook | null>(null);
   const [defaultPrompts, setDefaultPrompts] = useState<DefaultPrompts | null>(null);
+  const [defaultExtensions, setDefaultExtensions] = useState<string | null>(null);
   const [form] = Form.useForm();
 
   const fetchData = async () => {
@@ -38,9 +39,19 @@ const BranchWebhooks: React.FC = () => {
     }
   };
 
+  const fetchDefaultExtensions = async () => {
+    try {
+      const response = await branchWebhookApi.getDefaultExtensions();
+      setDefaultExtensions(response.supported_extensions);
+    } catch (error) {
+      console.error('Failed to fetch default extensions:', error);
+    }
+  };
+
   useEffect(() => {
     fetchData();
     fetchDefaultPrompts();
+    fetchDefaultExtensions();
   }, []);
 
   const handleCreate = () => {
@@ -51,6 +62,12 @@ const BranchWebhooks: React.FC = () => {
       form.setFieldsValue({
         custom_prompt_system: defaultPrompts.custom_prompt_system,
         custom_prompt_user: defaultPrompts.custom_prompt_user,
+      });
+    }
+    // 加载默认扩展名
+    if (defaultExtensions) {
+      form.setFieldsValue({
+        supported_extensions: defaultExtensions,
       });
     }
     setModalVisible(true);
@@ -196,6 +213,19 @@ const BranchWebhooks: React.FC = () => {
         };
         return <Tooltip title={style}>{styleMap[style] || '默认'}</Tooltip>;
       },
+    },
+    {
+      title: '文件扩展名',
+      dataIndex: 'supported_extensions',
+      key: 'supported_extensions',
+      width: 100,
+      hidden: false,
+      ellipsis: true,
+      render: (exts: string) => (
+        <Tooltip title={exts}>
+          <span style={{ fontSize: '11px' }}>{exts || '-'}</span>
+        </Tooltip>
+      ),
     },
     {
       title: '操作',
@@ -405,6 +435,17 @@ const BranchWebhooks: React.FC = () => {
                           { label: '幽默风格', value: 'humorous' },
                           { label: '🎲 随机风格', value: 'random' },
                         ]}
+                      />
+                    </Form.Item>
+
+                    <Form.Item 
+                      label="支持的文件扩展名" 
+                      name="supported_extensions" 
+                      tooltip="指定需要评审的文件扩展名，用逗号分隔。如：.java,.py,.js,.ts。留空则使用项目级配置或环境变量默认值"
+                    >
+                      <Input.TextArea 
+                        rows={2} 
+                        placeholder=".java,.py,.php,.js,.ts,.tsx,.vue,.go,.rs,.java,.c,.cpp,.h" 
                       />
                     </Form.Item>
                   </div>

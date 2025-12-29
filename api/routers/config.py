@@ -92,3 +92,12 @@ async def get_default_prompts():
             'custom_prompt_system': DEFAULT_SYSTEM_PROMPT,
             'custom_prompt_user': DEFAULT_USER_PROMPT
         }
+
+
+@router.get("/default-extensions")
+async def get_default_extensions():
+    """获取默认的文件扩展名"""
+    default_extensions = os.getenv('SUPPORTED_EXTENSIONS', '.c,.cc,.cpp,.cs,.css,.cxx,.go,.h,.hh,.hpp,.hxx,.java,.js,.jsx,.md,.php,.py,.sql,.ts,.tsx,.vue,.yml')
+    return {
+        'supported_extensions': default_extensions
+    }

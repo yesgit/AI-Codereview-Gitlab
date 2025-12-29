@@ -27,6 +27,7 @@ class BranchWebhookCreate(BaseModel):
     review_style: Optional[str] = None
     gitlab_token: Optional[str] = None
     daily_report_enabled: Optional[bool] = None
+    supported_extensions: Optional[str] = None
 
 
 class BranchWebhookUpdate(BaseModel):
@@ -44,6 +45,7 @@ class BranchWebhookUpdate(BaseModel):
     review_style: Optional[str] = None
     gitlab_token: Optional[str] = None
     daily_report_enabled: Optional[bool] = None
+    supported_extensions: Optional[str] = None
 
 
 class BranchWebhookResponse(BaseModel):
@@ -62,6 +64,7 @@ class BranchWebhookResponse(BaseModel):
     review_style: Optional[str] = None
     gitlab_token: Optional[str] = None
     daily_report_enabled: Optional[bool] = None
+    supported_extensions: Optional[str] = None
     created_at: Optional[int] = None
     updated_at: Optional[int] = None
 
@@ -114,7 +117,8 @@ async def create_branch_webhook(webhook: BranchWebhookCreate, current_user: str 
         custom_prompt_user=webhook.custom_prompt_user,
         review_style=webhook.review_style,
         gitlab_token=webhook.gitlab_token,
-        daily_report_enabled=webhook.daily_report_enabled
+        daily_report_enabled=webhook.daily_report_enabled,
+        supported_extensions=webhook.supported_extensions
     )
     
     if not result:
@@ -174,7 +178,8 @@ async def update_branch_webhook(config_id: int, webhook: BranchWebhookUpdate, cu
         custom_prompt_user=webhook.custom_prompt_user,
         review_style=webhook.review_style,
         gitlab_token=webhook.gitlab_token,
-        daily_report_enabled=webhook.daily_report_enabled
+        daily_report_enabled=webhook.daily_report_enabled,
+        supported_extensions=webhook.supported_extensions
     )
     
     if not result:

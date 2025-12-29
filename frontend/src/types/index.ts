@@ -32,6 +32,7 @@ export interface Webhook {
   review_style?: string;
   gitlab_token?: string;
   daily_report_enabled?: boolean;
+  supported_extensions?: string;
   created_at?: number;
   updated_at?: number;
 }
@@ -53,6 +54,7 @@ export interface WebhookForm {
   wecom_enabled?: boolean;
   review_style?: string;
   daily_report_enabled?: boolean;
+  supported_extensions?: string;
 }
 
 export interface BranchWebhook {
@@ -71,6 +73,7 @@ export interface BranchWebhook {
   review_style?: string;
   gitlab_token?: string;
   daily_report_enabled?: boolean;
+  supported_extensions?: string;
   created_at?: number;
   updated_at?: number;
 }
@@ -90,6 +93,7 @@ export interface BranchWebhookForm {
   review_style?: string;
   gitlab_token?: string;
   daily_report_enabled?: boolean;
+  supported_extensions?: string;
 }
 
 export const ReviewStyleOptions = [

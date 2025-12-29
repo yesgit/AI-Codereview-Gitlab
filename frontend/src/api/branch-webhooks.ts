@@ -16,4 +16,7 @@ export const branchWebhookApi = {
   
   getDefaultPrompts: () => 
     request.get<{custom_prompt_system: string; custom_prompt_user: string}>('/config/default-prompts'),
+  
+  getDefaultExtensions: () => 
+    request.get<{supported_extensions: string}>('/config/default-extensions'),
 };

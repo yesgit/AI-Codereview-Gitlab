@@ -4,6 +4,7 @@ import time
 from urllib.parse import urljoin, urlparse
 import fnmatch
 import requests
+from typing import List, Optional
 
 from biz.utils.log import logger
 
@@ -51,12 +52,160 @@ def extract_gitlab_info(webhook_data: dict) -> tuple:
     return gitlab_base_url, project_slug
 
 
-def filter_changes(changes: list):
+def normalize_extensions(extensions_str: str, config_source: str = "") -> List[str]:
+    """
+    规范化文件扩展名列表，支持容错处理
+    
+    容错策略:
+    1. 自动添加点号：java -> .java
+    2. 清理多余分隔符：,, -> 空
+    3. 统一小写格式：.JAVA -> .java
+    4. 过滤无效扩展名：跳过非法字符
+    
+    Args:
+        extensions_str: 扩展名字符串，如 ".java,.py" 或 "java,py"
+        config_source: 配置来源（用于日志）
+        
+    Returns:
+        List[str]: 规范化后的扩展名列表
+    """
+    if not extensions_str or not extensions_str.strip():
+        return []
+    
+    extensions = []
+    invalid_extensions = []
+    normalized_extensions = []
+    
+    # 分割并清理
+    for ext in extensions_str.split(','):
+        ext = ext.strip()
+        if not ext:
+            continue
+        
+        # 自动添加点号（如果缺少）
+        if not ext.startswith('.'):
+            original_ext = ext
+            ext = f".{ext}"
+            logger.debug(f"⚠️  自动为 '{original_ext}' 添加点号: '{ext}'")
+        
+        # 统一小写格式
+        original_case = ext
+        ext = ext.lower()
+        if original_case != ext:
+            logger.debug(f"⚠️  扩展名大小写修正: '{original_case}' -> '{ext}'")
+        
+        # 验证扩展名格式（只包含点和字母数字）
+        # 允许格式：.java, .py, .ts, .js, .tsx, .jsx, .go, .rs 等
+        if not re.match(r'^\.[a-zA-Z0-9]+$', ext):
+            invalid_extensions.append(ext)
+            logger.warning(f"⚠️  跳过无效扩展名: '{ext}'（配置来源: {config_source}）")
+        else:
+            # 去重（保留第一次出现的）
+            if ext not in extensions:
+                extensions.append(ext)
+                normalized_extensions.append(ext)
+            else:
+                logger.debug(f"⚠️  跳过重复扩展名: '{ext}'")
+    
+    # 记录警告信息
+    if invalid_extensions:
+        logger.warning(f"⚠️  配置中发现 {len(invalid_extensions)} 个无效扩展名，已跳过: {invalid_extensions}")
+    
+    if config_source and normalized_extensions:
+        logger.info(f"✅ 从 {config_source} 解析到有效扩展名: {normalized_extensions}")
+    elif config_source and not normalized_extensions and extensions_str.strip():
+        logger.warning(f"⚠️  {config_source} 配置的扩展名无法解析，将使用默认值")
+    
+    return normalized_extensions
+
+
+def get_supported_extensions(gitlab_base_url: str, project_slug: str, 
+                            branch_name: Optional[str] = None) -> List[str]:
+    """
+    获取文件扩展名过滤列表，按优先级回退，支持容错处理
+    
+    优先级: 分支级 > 项目级 > 环境变量 > 硬编码默认值
+    
+    容错机制:
+    - 自动修正扩展名格式（添加点号、小写转换）
+    - 过滤无效扩展名并记录警告
+    - 配置解析失败时降级到下一级
+    
+    Args:
+        gitlab_base_url: GitLab实例地址
+        project_slug: 项目slug
+        branch_name: 分支名称（可选）
+        
+    Returns:
+        List[str]: 文件扩展名列表，如 ['.java', '.py', '.js']
+    """
+    # 1. 尝试从分支级获取
+    if branch_name:
+        try:
+            from biz.service.branch_webhook_service import BranchWebhookService
+            branch_config = BranchWebhookService.match_branch_webhook(
+                gitlab_base_url, project_slug, branch_name
+            )
+            if branch_config and branch_config.get('supported_extensions'):
+                extensions = normalize_extensions(
+                    branch_config['supported_extensions'], 
+                    "分支级配置"
+                )
+                if extensions:
+                    return extensions
+        except Exception as e:
+            logger.warning(f"获取分支级文件扩展名配置失败: {e}")
+    
+    # 2. 尝试从项目级获取
+    try:
+        from biz.service.webhook_service import WebhookService
+        project_config = WebhookService.get_webhook_mapping_by_gitlab_project(
+            gitlab_base_url, project_slug
+        )
+        if project_config and project_config.get('supported_extensions'):
+            extensions = normalize_extensions(
+                project_config['supported_extensions'], 
+                "项目级配置"
+            )
+            if extensions:
+                return extensions
+    except Exception as e:
+        logger.warning(f"获取项目级文件扩展名配置失败: {e}")
+    
+    # 3. 从环境变量获取
+    env_extensions = os.getenv('SUPPORTED_EXTENSIONS', '.java,.py,.php')
+    extensions = normalize_extensions(env_extensions, "环境变量")
+    if extensions:
+        return extensions
+    
+    # 4. 最后降级到硬编码默认值
+    default_extensions = ['.java', '.py', '.php']
+    logger.warning(f"⚠️  所有配置源均失败，使用硬编码默认扩展名: {default_extensions}")
+    return default_extensions
+
+
+def filter_changes(changes: list, gitlab_base_url: str = '', 
+                 project_slug: str = '', branch_name: str = ''):
     '''
     过滤数据，只保留支持的文件类型以及必要的字段信息
+    
+    Args:
+        changes: 文件变更列表
+        gitlab_base_url: GitLab实例地址（可选，用于获取自定义扩展名）
+        project_slug: 项目slug（可选，用于获取自定义扩展名）
+        branch_name: 分支名称（可选，用于获取自定义扩展名）
     '''
-    # 从环境变量中获取支持的文件扩展名
-    supported_extensions = os.getenv('SUPPORTED_EXTENSIONS', '.java,.py,.php').split(',')
+    # 按优先级获取文件扩展名
+    if gitlab_base_url and project_slug:
+        supported_extensions = get_supported_extensions(
+            gitlab_base_url, project_slug, branch_name
+        )
+    else:
+        # 兼容旧代码，没有项目信息时从环境变量获取
+        supported_extensions = os.getenv('SUPPORTED_EXTENSIONS', '.java,.py,.php').split(',')
+        supported_extensions = [ext.strip() for ext in supported_extensions if ext.strip()]
+    
+    logger.info(f"使用的文件扩展名过滤: {supported_extensions}")
 
     filter_deleted_files_changes = [change for change in changes if not change.get("deleted_file")]
 
