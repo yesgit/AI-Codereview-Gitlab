@@ -14,6 +14,9 @@ export const branchWebhookApi = {
   delete: (id: number) => 
     request.delete(`/branch-webhooks/${id}`),
   
+  sendDailyReport: (id: number) =>
+    request.post<{message: string; count: number}>(`/branch-webhooks/${id}/send-daily-report`),
+  
   getDefaultPrompts: () => 
     request.get<{custom_prompt_system: string; custom_prompt_user: string}>('/config/default-prompts'),
   

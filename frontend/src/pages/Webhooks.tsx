@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, message, Popconfirm, Switch, Select, Tooltip, Tabs } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SendOutlined } from '@ant-design/icons';
 import { webhookApi } from '@/api/webhooks';
 import type { Webhook, WebhookForm } from '@/types';
 
@@ -86,6 +86,16 @@ const Webhooks: React.FC = () => {
       fetchData();
     } catch (error) {
       console.error('Failed to delete webhook:', error);
+    }
+  };
+
+  const handleSendReport = async (id: number) => {
+    try {
+      const result = await webhookApi.sendDailyReport(id);
+      message.success(result.message || '日报发送成功');
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.detail || '日报发送失败';
+      message.error(errorMsg);
     }
   };
 
@@ -238,7 +248,7 @@ const Webhooks: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 100,
+      width: 140,
       fixed: 'right' as const,
       hidden: false,
       render: (_: any, record: Webhook) => (
@@ -250,6 +260,14 @@ const Webhooks: React.FC = () => {
             onClick={() => handleEdit(record)}
           >
             编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<SendOutlined />}
+            onClick={() => handleSendReport(record.id)}
+          >
+            发送日报
           </Button>
           <Popconfirm
             title="确认删除？"

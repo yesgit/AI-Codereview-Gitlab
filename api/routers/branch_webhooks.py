@@ -2,11 +2,22 @@
 分支配置 Webhook API
 """
 from typing import List, Optional
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
+import pandas as pd
+import fnmatch
 
 from biz.service.webhook_service import WebhookService
+from biz.service.review_service import ReviewService
+from biz.api import push_review_enabled
+from biz.utils.im.dingtalk import DingTalkNotifier
+from biz.utils.im.feishu import FeishuNotifier
+from biz.utils.im.wecom import WeComNotifier
+from biz.utils.im import notifier
+from biz.utils.log import logger
+from biz.utils.reporter import Reporter
 from api.routers.auth import get_current_user
 
 router = APIRouter()
@@ -205,3 +216,120 @@ async def delete_branch_webhook(config_id: int, current_user: str = Depends(get_
     """删除分支配置"""
     WebhookService.delete_branch_webhook_config(config_id)
     return None
+
+
+def get_branch_for_log(log: dict) -> str:
+    """从日志中获取分支名称"""
+    if 'source_branch' in log and log['source_branch']:
+        return log['source_branch']  # MR log
+    elif 'branch' in log and log['branch']:
+        return log['branch']  # Push log
+    return None
+
+
+@router.post("/{config_id}/send-daily-report", status_code=status.HTTP_200_OK)
+async def send_branch_daily_report(config_id: int, current_user: str = Depends(get_current_user)):
+    """为指定分支配置发送日报"""
+    logger.info(f"📋 开始为分支配置 {config_id} 发送日报")
+    
+    # 获取分支配置
+    all_configs = WebhookService.get_all_branch_webhook_configs()
+    config = None
+    for c in all_configs:
+        if c.get('id') == config_id:
+            config = c
+            break
+    
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"分支配置 {config_id} 不存在"
+        )
+    
+    # 获取当前日期0点和23点59分59秒的时间戳（使用 UTC 时间）
+    start_time = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    end_time = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59, microsecond=0).timestamp()
+    
+    logger.info(f"📋 时间范围: {datetime.fromtimestamp(start_time, tz=timezone.utc)} ~ {datetime.fromtimestamp(end_time, tz=timezone.utc)}")
+    
+    # 获取当日审查日志
+    if push_review_enabled:
+        df = ReviewService().get_push_review_logs(updated_at_gte=start_time, updated_at_lte=end_time)
+    else:
+        df = ReviewService().get_mr_review_logs(updated_at_gte=start_time, updated_at_lte=end_time)
+    
+    if df.empty:
+        logger.info("⚠️ 当日无审查数据")
+        return {"message": "当日无审查数据", "count": 0}
+    
+    # 筛选属于该项目的日志
+    logs = df.to_dict(orient="records")
+    
+    gitlab_base_url = config.get('gitlab_base_url')
+    project_slug = config.get('project_slug')
+    branch_pattern = config.get('branch_pattern')
+    
+    # 筛选项目日志
+    filtered_logs = []
+    for log in logs:
+        if log.get('gitlab_base_url') == gitlab_base_url and log.get('project_slug') == project_slug:
+            branch_name = get_branch_for_log(log)
+            if branch_name:
+                # 检查分支是否匹配模式
+                if fnmatch.fnmatch(branch_name, branch_pattern):
+                    filtered_logs.append(log)
+    
+    logger.info(f"📋 筛选后共有 {len(filtered_logs)} 条记录")
+    
+    if not filtered_logs:
+        logger.info("⚠️ 该分支当日无审查数据")
+        return {"message": "该分支当日无审查数据", "count": 0}
+    
+    # 检查配置的日报开关
+    if config.get('daily_report_enabled') is not True:
+        logger.info(f"⏭️ 该分支未启用日报 (daily_report_enabled={config.get('daily_report_enabled')})")
+    
+    # 去重：基于 (author, message) 组合
+    df_filtered = pd.DataFrame(filtered_logs)
+    df_unique = df_filtered.drop_duplicates(subset=["author", "commit_messages"])
+    df_sorted = df_unique.sort_values(by="author")
+    commits = df_sorted.to_dict(orient="records")
+    
+    # 生成日报内容
+    title_prefix = f"项目:{project_slug} 分支:{branch_pattern}"
+    import json
+    report_txt = Reporter().generate_report(json.dumps(commits), title_prefix=title_prefix)
+    
+    # 发送通知
+    if config.get('dingtalk_url'):
+        dt_notifier = DingTalkNotifier(config=config)
+        dt_notifier.send_message(
+            content=report_txt, 
+            msg_type="markdown", 
+            title=f"代码提交日报 - {title_prefix}"
+        )
+    if config.get('feishu_url'):
+        fs_notifier = FeishuNotifier(config=config)
+        fs_notifier.send_message(
+            content=report_txt, 
+            msg_type="markdown", 
+            title=f"代码提交日报 - {title_prefix}"
+        )
+    if config.get('wecom_url'):
+        wc_notifier = WeComNotifier(config=config)
+        wc_notifier.send_message(
+            content=report_txt, 
+            msg_type="markdown", 
+            title=f"代码提交日报 - {title_prefix}"
+        )
+    
+    # 如果配置无效，使用默认通知方式
+    if not any(config.get(f) for f in ['dingtalk_url', 'feishu_url', 'wecom_url']):
+        notifier.send_notification(
+            content=report_txt, 
+            msg_type="markdown", 
+            title=f"代码提交日报 - {title_prefix}"
+        )
+    
+    logger.info(f"✅ 日报发送成功，共 {len(commits)} 条记录")
+    return {"message": "日报发送成功", "count": len(commits)}
