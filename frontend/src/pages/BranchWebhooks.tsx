@@ -229,7 +229,7 @@ const BranchWebhooks: React.FC = () => {
       dataIndex: 'supported_extensions',
       key: 'supported_extensions',
       width: 100,
-      hidden: false,
+      hidden: true,
       ellipsis: true,
       render: (exts: string) => (
         <Tooltip title={exts}>
