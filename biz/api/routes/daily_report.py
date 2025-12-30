@@ -83,9 +83,10 @@ def send_report_to_config(logs: List[dict], config: dict, title_prefix: str = No
     if not logs:
         return
     
-    # 检查是否启用日报
-    if config and config.get('daily_report_enabled') is False:
-        logger.info(f"⏭️ 跳过日报发送: {title_prefix} (daily_report_enabled=False)")
+    # 检查是否启用日报（只有显式设置为 True 时才发送）
+    # 如果配置存在且 daily_report_enabled 不是 True，则跳过发送
+    if config and config.get('daily_report_enabled') is not True:
+        logger.info(f"⏭️ 跳过日报发送: {title_prefix} (daily_report_enabled={config.get('daily_report_enabled')})")
         return
     
     # 去重：基于 (author, message) 组合
@@ -217,9 +218,9 @@ def daily_report_task():
                     branch_config = group_data['config']
                     title_prefix = f"项目:{project_name} 分支:{branch_pattern}"
                     
-                    # 检查分支配置的日报开关
-                    if branch_config.get('daily_report_enabled') is False:
-                        logger.info(f"⏭️ 跳过分支日报: {title_prefix} (daily_report_enabled=False), 共 {len(branch_logs)} 条记录")
+                    # 检查分支配置的日报开关（只有显式设置为 True 时才发送）
+                    if branch_config.get('daily_report_enabled') is not True:
+                        logger.info(f"⏭️ 跳过分支日报: {title_prefix} (daily_report_enabled={branch_config.get('daily_report_enabled')}), 共 {len(branch_logs)} 条记录")
                     else:
                         logger.info(f"发送分支日报: {title_prefix}, 共 {len(branch_logs)} 条记录")
                         send_report_to_config(branch_logs, branch_config, title_prefix=title_prefix)
@@ -237,9 +238,9 @@ def daily_report_task():
                         project_config = ReviewService().get_webhook_mapping(project_name=project_name)
                     # 检查项目配置是否有效（至少有一个 webhook URL）
                     if project_config and WebhookService.is_valid_webhook_config(project_config):
-                        # 检查项目配置的日报开关
-                        if project_config.get('daily_report_enabled') is False:
-                            logger.info(f"⏭️ 跳过项目级日报: {project_name} (daily_report_enabled=False), 共 {len(unmatched_logs)} 条记录")
+                        # 检查项目配置的日报开关（只有显式设置为 True 时才发送）
+                        if project_config.get('daily_report_enabled') is not True:
+                            logger.info(f"⏭️ 跳过项目级日报: {project_name} (daily_report_enabled={project_config.get('daily_report_enabled')}), 共 {len(unmatched_logs)} 条记录")
                         else:
                             logger.info(f"✅ 使用项目级配置发送: {gitlab_base_url}/{project_slug}")
                             send_report_to_config(unmatched_logs, project_config, title_prefix=f"项目:{project_name}")
@@ -260,9 +261,9 @@ def daily_report_task():
                     project_config = ReviewService().get_webhook_mapping(project_name=project_name)
                 # 检查项目配置是否有效（至少有一个 webhook URL）
                 if project_config and WebhookService.is_valid_webhook_config(project_config):
-                    # 检查项目配置的日报开关
-                    if project_config.get('daily_report_enabled') is False:
-                        logger.info(f"⏭️ 跳过项目级日报: {project_name} (daily_report_enabled=False), 共 {len(project_logs)} 条记录")
+                    # 检查项目配置的日报开关（只有显式设置为 True 时才发送）
+                    if project_config.get('daily_report_enabled') is not True:
+                        logger.info(f"⏭️ 跳过项目级日报: {project_name} (daily_report_enabled={project_config.get('daily_report_enabled')}), 共 {len(project_logs)} 条记录")
                     else:
                         logger.info(f"✅ 使用项目级配置发送: {gitlab_base_url}/{project_slug}")
                         send_report_to_config(project_logs, project_config, title_prefix=f"项目:{project_name}")
@@ -362,8 +363,12 @@ def daily_report():
                     branch_logs = group_data['logs']
                     branch_config = group_data['config']
                     title_prefix = f"项目:{project_name} 分支:{branch_pattern}"
-                    logger.info(f"发送分支日报: {title_prefix}, 共 {len(branch_logs)} 条记录")
-                    send_report_to_config(branch_logs, branch_config, title_prefix=title_prefix)
+                    # 检查分支配置的日报开关（只有显式设置为 True 时才发送）
+                    if branch_config.get('daily_report_enabled') is not True:
+                        logger.info(f"⏭️ 跳过分支日报: {title_prefix} (daily_report_enabled={branch_config.get('daily_report_enabled')}), 共 {len(branch_logs)} 条记录")
+                    else:
+                        logger.info(f"发送分支日报: {title_prefix}, 共 {len(branch_logs)} 条记录")
+                        send_report_to_config(branch_logs, branch_config, title_prefix=title_prefix)
                 
                 # 处理未匹配到分支配置的日志（发送到项目级配置或默认配置）
                 if unmatched_logs:
@@ -378,8 +383,12 @@ def daily_report():
                         project_config = ReviewService().get_webhook_mapping(project_name=project_name)
                     # 检查项目配置是否有效（至少有一个 webhook URL）
                     if project_config and WebhookService.is_valid_webhook_config(project_config):
-                        logger.info(f"✅ 使用项目级配置发送: {gitlab_base_url}/{project_slug}")
-                        send_report_to_config(unmatched_logs, project_config, title_prefix=f"项目:{project_name}")
+                        # 检查项目配置的日报开关（只有显式设置为 True 时才发送）
+                        if project_config.get('daily_report_enabled') is not True:
+                            logger.info(f"⏭️ 跳过项目级日报: {project_name} (daily_report_enabled={project_config.get('daily_report_enabled')}), 共 {len(unmatched_logs)} 条记录")
+                        else:
+                            logger.info(f"✅ 使用项目级配置发送: {gitlab_base_url}/{project_slug}")
+                            send_report_to_config(unmatched_logs, project_config, title_prefix=f"项目:{project_name}")
                     else:
                         # 项目配置无效或不存在，发送到默认配置（系统级）
                         logger.info(f"⚠️ 项目配置无效，使用系统默认配置: {gitlab_base_url}/{project_slug}")
@@ -397,8 +406,12 @@ def daily_report():
                     project_config = ReviewService().get_webhook_mapping(project_name=project_name)
                 # 检查项目配置是否有效（至少有一个 webhook URL）
                 if project_config and WebhookService.is_valid_webhook_config(project_config):
-                    logger.info(f"✅ 使用项目级配置发送: {gitlab_base_url}/{project_slug}")
-                    send_report_to_config(project_logs, project_config, title_prefix=f"项目:{project_name}")
+                    # 检查项目配置的日报开关（只有显式设置为 True 时才发送）
+                    if project_config.get('daily_report_enabled') is not True:
+                        logger.info(f"⏭️ 跳过项目级日报: {project_name} (daily_report_enabled={project_config.get('daily_report_enabled')}), 共 {len(project_logs)} 条记录")
+                    else:
+                        logger.info(f"✅ 使用项目级配置发送: {gitlab_base_url}/{project_slug}")
+                        send_report_to_config(project_logs, project_config, title_prefix=f"项目:{project_name}")
                 else:
                     # 项目配置无效或不存在，发送到默认配置（系统级）
                     logger.info(f"⚠️ 项目配置无效，使用系统默认配置: {gitlab_base_url}/{project_slug}")

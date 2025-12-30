@@ -421,21 +421,21 @@ class WebhookService:
             if token_source:
                 logger.debug(f"  gitlab_token: 使用{token_source}配置")
         
-        # Enabled 状态：优先级 分支级 > 项目级 > 系统级
+        # Enabled 状态：如果子层级配置存在，使用其值（不回退）
         for enabled_field in ['dingtalk_enabled', 'feishu_enabled', 'wecom_enabled']:
             enabled_value = None
             enabled_source = None
             
             # 尝试从分支级获取
-            if branch_config and branch_config.get(enabled_field) is not None:
+            if branch_config and enabled_field in branch_config:
                 enabled_value = branch_config.get(enabled_field)
                 enabled_source = "分支级"
             # 尝试从项目级获取
-            elif project_config and project_config.get(enabled_field) is not None:
+            elif project_config and enabled_field in project_config:
                 enabled_value = project_config.get(enabled_field)
                 enabled_source = "项目级"
             # 尝试从系统级获取
-            elif system_config.get(enabled_field) is not None:
+            elif enabled_field in system_config:
                 enabled_value = system_config.get(enabled_field)
                 enabled_source = "系统级"
             

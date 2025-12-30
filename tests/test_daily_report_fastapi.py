@@ -119,15 +119,16 @@ def test_daily_report_task_with_project_and_branch_config():
         }])
         mock_review_service.return_value.get_mr_review_logs.return_value = mock_df
         
-        # 模拟分支配置
+        # 模拟分支配置（显式启用日报）
         mock_branch_service.get_all_branch_webhooks.return_value = [{
-            'id': 1,
+            'id':1,
             'gitlab_base_url': 'https://gitlab.example.com',
             'project_slug': 'test-project',
             'branch_pattern': 'feature/*',
             'dingtalk_url': 'https://oapi.dingtalk.com/robot/send?access_token=test',
             'feishu_url': None,
-            'wecom_url': None
+            'wecom_url': None,
+            'daily_report_enabled': True
         }]
         
         # 模拟报告生成
@@ -160,7 +161,7 @@ def test_daily_report_task_exact_branch_match():
         }])
         mock_review_service.return_value.get_mr_review_logs.return_value = mock_df
         
-        # 模拟分支配置 - 精确匹配
+        # 模拟分支配置 - 精确匹配（显式启用日报）
         mock_branch_service.get_all_branch_webhooks.return_value = [{
             'id': 1,
             'gitlab_base_url': 'https://gitlab.example.com',
@@ -168,7 +169,8 @@ def test_daily_report_task_exact_branch_match():
             'branch_pattern': 'main',  # 精确匹配
             'dingtalk_url': 'https://oapi.dingtalk.com/robot/send?access_token=test',
             'feishu_url': None,
-            'wecom_url': None
+            'wecom_url': None,
+            'daily_report_enabled': True
         }]
         
         # 模拟报告生成
@@ -203,7 +205,7 @@ def test_daily_report_task_wildcard_branch_match():
         }])
         mock_review_service.return_value.get_mr_review_logs.return_value = mock_df
         
-        # 模拟分支配置 - 通配符匹配
+        # 模拟分支配置 - 通配符匹配（显式启用日报）
         mock_branch_service.get_all_branch_webhooks.return_value = [{
             'id': 1,
             'gitlab_base_url': 'https://gitlab.example.com',
@@ -211,7 +213,8 @@ def test_daily_report_task_wildcard_branch_match():
             'branch_pattern': 'feature/*',  # 通配符匹配
             'dingtalk_url': 'https://oapi.dingtalk.com/robot/send?access_token=test',
             'feishu_url': None,
-            'wecom_url': None
+            'wecom_url': None,
+            'daily_report_enabled': True
         }]
         
         # 模拟报告生成
