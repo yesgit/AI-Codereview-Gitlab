@@ -59,11 +59,13 @@ const Stats: React.FC = () => {
   const pushAuthorColumns = [
     { title: '作者', dataIndex: 'author', key: 'author' },
     { title: '审查次数', dataIndex: 'count', key: 'count', sorter: (a: any, b: any) => a.count - b.count },
+    { title: '平均评分', dataIndex: 'score', key: 'score', render: (score: number) => score.toFixed(1) },
   ];
 
   const pushAuthorData = Object.entries(stats.push.author_counts).map(([author, count]) => ({
     author,
     count,
+    score: stats.push.author_scores[author] || 0,
   }));
 
   return (

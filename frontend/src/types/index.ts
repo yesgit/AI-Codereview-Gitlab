@@ -143,5 +143,6 @@ export interface StatsResponse {
     total: number;
     average_score: number;
     author_counts: Record<string, number>;
+    author_scores: Record<string, number>;
   };
 }

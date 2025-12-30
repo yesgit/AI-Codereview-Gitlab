@@ -141,6 +141,7 @@ async def get_stats(
         "push": {
             "total": len(push_df),
             "average_score": float(push_df['score'].mean()) if not push_df.empty else 0.0,
-            "author_counts": push_df['author'].value_counts().to_dict() if not push_df.empty else {}
+            "author_counts": push_df['author'].value_counts().to_dict() if not push_df.empty else {},
+            "author_scores": push_df.groupby('author')['score'].mean().to_dict() if not push_df.empty else {}
         }
     }
