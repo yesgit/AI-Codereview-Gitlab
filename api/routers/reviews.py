@@ -1,13 +1,14 @@
 """
 查询统计 API
 """
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 import datetime
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from biz.service.review_service import ReviewService
+from biz.service.queue_service import QueueService
 from api.routers.auth import get_current_user
 
 router = APIRouter()
@@ -28,6 +29,15 @@ class ReviewLogItem(BaseModel):
 class ReviewStatsResponse(BaseModel):
     total_count: int
     average_score: float
+
+
+class QueueStatsResponse(BaseModel):
+    queue_driver: str
+    supported: bool
+    message: Optional[str] = None
+    stats: Optional[Dict[str, int]] = None
+    by_project: Optional[Dict[str, Any]] = None
+    total: Optional[int] = None
 
 
 @router.get("/mr")
@@ -145,3 +155,12 @@ async def get_stats(
             "author_scores": push_df.groupby('author')['score'].mean().to_dict() if not push_df.empty else {}
         }
     }
+
+
+@router.get("/queue-status", response_model=QueueStatsResponse)
+async def get_queue_status(
+    current_user: str = Depends(get_current_user)
+):
+    """获取队列状态统计（仅支持 Redis Queue 模式）"""
+    queue_service = QueueService()
+    return queue_service.get_queue_status()

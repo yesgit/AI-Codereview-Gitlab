@@ -1,5 +1,5 @@
 import request from '@/utils/request';
-import type { ReviewListResponse, StatsResponse } from '@/types';
+import type { ReviewListResponse, StatsResponse, QueueStatsResponse } from '@/types';
 
 export const reviewsApi = {
   getMrReviews: (params?: {
@@ -25,6 +25,9 @@ export const reviewsApi = {
     updated_at_lte?: number;
   }) => 
     request.get<StatsResponse>('/reviews/stats', { params }),
+
+  getQueueStatus: () => 
+    request.get<QueueStatsResponse>('/reviews/queue-status'),
 
   sendDailyReport: () => 
     request.get<{ message: string }>('/review/daily_report', { baseURL: '' }),

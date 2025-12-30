@@ -146,3 +146,40 @@ export interface StatsResponse {
     author_scores: Record<string, number>;
   };
 }
+
+export interface QueueTask {
+  job_id: string;
+  created_at: string;
+  enqueued_at: string;
+  status: string;
+  function_name: string;
+  event_type?: string;
+  project_name?: string;
+  author?: string;
+  source_branch?: string;
+  target_branch?: string;
+  branch?: string;
+  url?: string;
+  changed_files?: number;
+  commit_count?: number;
+}
+
+export interface ProjectQueueInfo {
+  pending: number;
+  processing: number;
+  tasks: QueueTask[];
+}
+
+export interface QueueStatsResponse {
+  queue_driver: string;
+  supported: boolean;
+  message?: string;
+  stats?: {
+    pending: number;
+    processing: number;
+    failed: number;
+    completed: number;
+  };
+  by_project?: Record<string, ProjectQueueInfo>;
+  total?: number;
+}

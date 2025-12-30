@@ -5,6 +5,7 @@ import Login from '@/pages/Login';
 import MainLayout from '@/components/MainLayout';
 import Reviews from '@/pages/Reviews';
 import Stats from '@/pages/Stats';
+import QueueStatus from '@/pages/QueueStatus';
 import Webhooks from '@/pages/Webhooks';
 import BranchWebhooks from '@/pages/BranchWebhooks';
 
@@ -38,6 +39,7 @@ const App: React.FC = () => {
             <Route index element={<Navigate to="/reviews" replace />} />
             <Route path="reviews" element={<Reviews />} />
             <Route path="stats" element={<Stats />} />
+            <Route path="queue-status" element={<QueueStatus />} />
             <Route path="webhooks" element={<Webhooks />} />
             <Route path="branch-webhooks" element={<BranchWebhooks />} />
           </Route>

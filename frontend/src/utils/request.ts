@@ -31,6 +31,10 @@ instance.interceptors.request.use(
 // 响应拦截器 - 返回 response.data
 instance.interceptors.response.use(
   (response) => {
+    // 检查是否是 HTML 响应（SPA fallback）
+    if (typeof response.data === 'string' && response.data.startsWith('<!doctype html>')) {
+      throw new Error('Received HTML response, likely an API route issue');
+    }
     return response.data;
   },
   (error) => {

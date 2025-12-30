@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import {
   FileSearchOutlined,
   BarChartOutlined,
+  ClusterOutlined,
   SettingOutlined,
   BranchesOutlined,
   LogoutOutlined,
@@ -18,6 +19,7 @@ const MainLayout: React.FC = () => {
   const menuItems = [
     { key: '/reviews', label: '查询审查', icon: <FileSearchOutlined /> },
     { key: '/stats', label: '统计分析', icon: <BarChartOutlined /> },
+    { key: '/queue-status', label: '队列状态', icon: <ClusterOutlined /> },
     { key: '/webhooks', label: '项目配置', icon: <SettingOutlined /> },
     { key: '/branch-webhooks', label: '分支配置', icon: <BranchesOutlined /> },
   ];
