@@ -142,6 +142,8 @@ export interface StatsResponse {
   push: {
     total: number;
     average_score: number;
+    project_counts: Record<string, number>;
+    project_scores: Record<string, number>;
     author_counts: Record<string, number>;
     author_scores: Record<string, number>;
   };

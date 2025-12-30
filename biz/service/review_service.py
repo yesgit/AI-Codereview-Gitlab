@@ -14,6 +14,20 @@ class ReviewService:
     def init_db():
         """初始化数据库及表结构"""
         try:
+            # 确保由 WebhookService 初始化 project_webhooks 表（包含完整字段）
+            try:
+                from biz.service.webhook_service import WebhookService
+                WebhookService.init_db()
+            except Exception as e:
+                logger.debug(f"WebhookService.init_db() 调用失败（可能已初始化）: {e}")
+            
+            # 确保由 BranchWebhookService 初始化 branch_webhooks 表
+            try:
+                from biz.service.branch_webhook_service import BranchWebhookService
+                BranchWebhookService.init_db()
+            except Exception as e:
+                logger.debug(f"BranchWebhookService.init_db() 调用失败（可能已初始化）: {e}")
+            
             engine = get_engine()
             from sqlalchemy import MetaData, Table, Column, Integer, Text
 
@@ -50,17 +64,6 @@ class ReviewService:
                 Column('deletions', Integer, default=0),
                 Column('gitlab_base_url', Text),
                 Column('project_slug', Text)
-            )
-            Table(
-                'project_webhooks', metadata,
-                Column('id', Integer, primary_key=True, autoincrement=True),
-                Column('project_name', Text, unique=True),
-                Column('url_slug', Text, unique=True),
-                Column('dingtalk_url', Text),
-                Column('feishu_url', Text),
-                Column('wecom_url', Text),
-                Column('created_at', Integer),
-                Column('updated_at', Integer),
             )
             metadata.create_all(engine)
         except Exception as e:
@@ -198,15 +201,16 @@ class ReviewService:
 
     @staticmethod
     def create_or_update_webhook_mapping(project_name: str = None, url_slug: str = None, dingtalk_url: str = None,
-                                         feishu_url: str = None, wecom_url: str = None):
+                                         feishu_url: str = None, wecom_url: str = None, gitlab_base_url: str = None,
+                                         project_slug: str = None):
         try:
             now = int(time.time())
             engine = get_engine()
             sel_by_project = text('SELECT id, project_name, url_slug FROM project_webhooks WHERE project_name = :project_name LIMIT 1')
             sel_by_slug = text('SELECT id, project_name, url_slug FROM project_webhooks WHERE url_slug = :url_slug LIMIT 1')
-            ins = text('''INSERT INTO project_webhooks (project_name, url_slug, dingtalk_url, feishu_url, wecom_url, created_at, updated_at)
-                         VALUES (:project_name, :url_slug, :dingtalk_url, :feishu_url, :wecom_url, :created_at, :updated_at)''')
-            upd = text('''UPDATE project_webhooks SET project_name = :project_name, url_slug = :url_slug, dingtalk_url = :dingtalk_url, feishu_url = :feishu_url, wecom_url = :wecom_url, updated_at = :updated_at WHERE id = :id''')
+            ins = text('''INSERT INTO project_webhooks (project_name, url_slug, dingtalk_url, feishu_url, wecom_url, gitlab_base_url, project_slug, created_at, updated_at)
+                         VALUES (:project_name, :url_slug, :dingtalk_url, :feishu_url, :wecom_url, :gitlab_base_url, :project_slug, :created_at, :updated_at)''')
+            upd = text('''UPDATE project_webhooks SET project_name = :project_name, url_slug = :url_slug, dingtalk_url = :dingtalk_url, feishu_url = :feishu_url, wecom_url = :wecom_url, gitlab_base_url = :gitlab_base_url, project_slug = :project_slug, updated_at = :updated_at WHERE id = :id''')
             with engine.begin() as conn:
                 existing_project = None
                 existing_slug = None
@@ -221,15 +225,15 @@ class ReviewService:
                         logger.error("Duplicate mapping exists for project_name or url_slug")
                         return None
                     mapping_id = existing_project['id']
-                    conn.execute(upd, {'project_name': project_name, 'url_slug': url_slug, 'dingtalk_url': dingtalk_url, 'feishu_url': feishu_url, 'wecom_url': wecom_url, 'updated_at': now, 'id': mapping_id})
+                    conn.execute(upd, {'project_name': project_name, 'url_slug': url_slug, 'dingtalk_url': dingtalk_url, 'feishu_url': feishu_url, 'wecom_url': wecom_url, 'gitlab_base_url': gitlab_base_url, 'project_slug': project_slug, 'updated_at': now, 'id': mapping_id})
                 elif existing_project:
                     mapping_id = existing_project['id']
-                    conn.execute(upd, {'project_name': project_name, 'url_slug': url_slug, 'dingtalk_url': dingtalk_url, 'feishu_url': feishu_url, 'wecom_url': wecom_url, 'updated_at': now, 'id': mapping_id})
+                    conn.execute(upd, {'project_name': project_name, 'url_slug': url_slug, 'dingtalk_url': dingtalk_url, 'feishu_url': feishu_url, 'wecom_url': wecom_url, 'gitlab_base_url': gitlab_base_url, 'project_slug': project_slug, 'updated_at': now, 'id': mapping_id})
                 elif existing_slug:
                     mapping_id = existing_slug['id']
-                    conn.execute(upd, {'project_name': project_name, 'url_slug': url_slug, 'dingtalk_url': dingtalk_url, 'feishu_url': feishu_url, 'wecom_url': wecom_url, 'updated_at': now, 'id': mapping_id})
+                    conn.execute(upd, {'project_name': project_name, 'url_slug': url_slug, 'dingtalk_url': dingtalk_url, 'feishu_url': feishu_url, 'wecom_url': wecom_url, 'gitlab_base_url': gitlab_base_url, 'project_slug': project_slug, 'updated_at': now, 'id': mapping_id})
                 else:
-                    conn.execute(ins, {'project_name': project_name, 'url_slug': url_slug, 'dingtalk_url': dingtalk_url, 'feishu_url': feishu_url, 'wecom_url': wecom_url, 'created_at': now, 'updated_at': now})
+                    conn.execute(ins, {'project_name': project_name, 'url_slug': url_slug, 'dingtalk_url': dingtalk_url, 'feishu_url': feishu_url, 'wecom_url': wecom_url, 'gitlab_base_url': gitlab_base_url, 'project_slug': project_slug, 'created_at': now, 'updated_at': now})
         except Exception as e:
             logger.error(f"Error creating/updating webhook mapping: {e}")
 

@@ -62,6 +62,12 @@ const Stats: React.FC = () => {
     { title: '平均评分', dataIndex: 'score', key: 'score', render: (score: number) => score.toFixed(1) },
   ];
 
+  const pushProjectData = Object.entries(stats.push.project_counts).map(([project, count]) => ({
+    project,
+    count,
+    score: stats.push.project_scores[project] || 0,
+  }));
+
   const pushAuthorData = Object.entries(stats.push.author_counts).map(([author, count]) => ({
     author,
     count,
@@ -136,11 +142,20 @@ const Stats: React.FC = () => {
           </Card>
         </TabPane>
         <TabPane tab="Push 统计" key="push">
-          <Card title="作者统计">
+          <Card title="作者统计" style={{ marginBottom: 16 }}>
             <Table
               columns={pushAuthorColumns}
               dataSource={pushAuthorData}
               rowKey="author"
+              pagination={false}
+              size="small"
+            />
+          </Card>
+          <Card title="项目统计">
+            <Table
+              columns={mrProjectColumns}
+              dataSource={pushProjectData}
+              rowKey="project"
               pagination={false}
               size="small"
             />

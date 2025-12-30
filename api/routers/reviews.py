@@ -137,6 +137,10 @@ async def get_stats(
     mr_additions = mr_df.groupby('author')['additions'].sum().to_dict() if not mr_df.empty else {}
     mr_deletions = mr_df.groupby('author')['deletions'].sum().to_dict() if not mr_df.empty else {}
     
+    # Push 项目统计
+    push_project_counts = push_df['project_name'].value_counts().to_dict() if not push_df.empty else {}
+    push_project_scores = push_df.groupby('project_name')['score'].mean().to_dict() if not push_df.empty else {}
+    
     return {
         "mr": {
             "total": len(mr_df),
@@ -151,6 +155,8 @@ async def get_stats(
         "push": {
             "total": len(push_df),
             "average_score": float(push_df['score'].mean()) if not push_df.empty else 0.0,
+            "project_counts": push_project_counts,
+            "project_scores": push_project_scores,
             "author_counts": push_df['author'].value_counts().to_dict() if not push_df.empty else {},
             "author_scores": push_df.groupby('author')['score'].mean().to_dict() if not push_df.empty else {}
         }
