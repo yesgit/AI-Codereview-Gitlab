@@ -3,13 +3,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/sunmh207/ai-codereview-gitlab:1.5.1
+      target: app
     ports:
-      - "5001:5001"
-      - "5002:5002"
+      - "${SERVER_PORT:-8000}:8000"
     volumes:
       - ./data:/app/data
       - ./log:/app/log
-    env_file:
-      - ./conf/.env
+      - ./conf/.env:/app/conf/.env:ro
+    environment:
+      - TZ=Asia/Shanghai
     restart: unless-stopped
