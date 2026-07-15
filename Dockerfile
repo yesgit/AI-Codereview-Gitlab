@@ -44,3 +44,19 @@ RUN mkdir -p data log
 EXPOSE 8000
 
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# ============================================
+# Stage 3: Worker (Redis Queue 模式，独立扩展)
+# ============================================
+FROM app AS worker
+
+# RQ Worker: 从 Redis 队列拉取任务执行
+# 使用前需设置: QUEUE_DRIVER=rq 和 REDIS_URL
+CMD ["sh", "-c", "\
+  if [ \"$QUEUE_DRIVER\" = 'rq' ]; then \
+    echo 'Starting RQ Worker...'; \
+    rq worker --url \"${REDIS_URL:-redis://redis:6379/0}\" \"${WORKER_QUEUE:-default}\"; \
+  else \
+    echo 'QUEUE_DRIVER not set to rq, worker idle'; \
+    tail -f /dev/null; \
+  fi"]
