@@ -1,7 +1,7 @@
-alembic>=1.0.0
 anthropic==0.39.0
 Flask==3.0.3
 APScheduler==3.10.4
+Flask==3.0.3
 httpx[socks]
 Jinja2==3.1.4
 lizard==1.17.20
@@ -11,21 +11,13 @@ openai==1.59.3
 pandas==2.2.3
 pathspec==0.12.1
 PyMySQL==1.1.1
-PyYAML==6.0.1
-redis==5.0.1
-rq==1.15.1
-SQLAlchemy==2.0.19
 python-gitlab==5.6.0
 requests==2.32.3
 spark-ai-python==0.4.5
+streamlit==1.42.2
+streamlit-cookies-manager==0.2.0
 tiktoken==0.9.0
 zhipuai==2.1.5.20230904
-pytest==7.4.0
-pytest-mock==3.11.0
-# 交互式图表
-plotly>=5.18.0
-
-# FastAPI Dashboard 依赖
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
-python-multipart>=0.0.6
+pytest==8.3.3
+pytest-mock==3.14.0
+pytest-cov==7.1.0

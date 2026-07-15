@@ -2,177 +2,105 @@ import base64
 import hashlib
 import hmac
 import json
-import requests
 import os
-import re
 import time
 import urllib.parse
-from typing import Optional
+
+import requests
+
 from biz.utils.log import logger
-from biz.service.webhook_service import WebhookService
 
 
 class DingTalkNotifier:
-    """干净的钉钉机器人通知器实现，支持 URL 掩码与可选签名。"""
-
-    def __init__(self, config=None):
-        self.default_webhook_url = ''
+    def __init__(self, webhook_url=None):
         self.enabled = os.environ.get('DINGTALK_ENABLED', '0') == '1'
-        self.secret = os.environ.get('DINGTALK_SECRET')
-        self.config = config or {}
-        
-        # 支持传入 webhook_url 或 config 字典
-        if isinstance(config, str):
-            self.default_webhook_url = config
-        elif config and isinstance(config, dict):
-            self.default_webhook_url = config.get('dingtalk_webhook') or config.get('dingtalk_url', '')
+        if os.environ.get('DINGTALK_SECRET_ENABLED', '0') == '1':
+            try:
+                timestamp = str(round(time.time() * 1000))
+                secret = os.environ.get('DINGTALK_SECRET')
+                secret_enc = secret.encode('utf-8')
+                string_to_sign = '{}\n{}'.format(timestamp, secret)
+                string_to_sign_enc = string_to_sign.encode('utf-8')
+                hmac_code = hmac.new(secret_enc, string_to_sign_enc, digestmod=hashlib.sha256).digest()
+                sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
+                self.default_webhook_url = "{}&timestamp={}&sign={}".format(os.environ.get('DINGTALK_WEBHOOK_URL'),timestamp,sign)
+                logger.info("加签后钉钉URL: %s", self.default_webhook_url)
+            except Exception as e:
+                logger.error("钉钉机器人加签失败: %s", e)
         else:
-            self.default_webhook_url = os.environ.get('DINGTALK_WEBHOOK_URL', '')
+            self.default_webhook_url = webhook_url or os.environ.get('DINGTALK_WEBHOOK_URL')
 
-    def _get_webhook_url(self, gitlab_base_url: Optional[str] = None, project_slug: Optional[str] = None,
-                        branch_name: Optional[str] = None, project_name: Optional[str] = None, 
-                        url_slug: Optional[str] = None) -> str:
+    def _get_webhook_url(self, project_name=None, url_slug=None):
         """
-        获取钉钉webhook URL，支持三级回退
-        
-        Args:
-            gitlab_base_url: GitLab实例地址
-            project_slug: 项目slug
-            branch_name: 分支名称
-            project_name: 项目名称（兼容旧方式）
-            url_slug: URL slug（兼容旧方式）
+        获取项目对应的 Webhook URL
+        :param project_name: 项目名称
+        :param url_slug: 由 gitlab 项目的 url 转换而来的 slug
+        :return: Webhook URL
+        :raises ValueError: 如果未找到 Webhook URL
         """
-        try:
-            # 优先使用构造函数传入的配置
-            if self.config and self.config.get('dingtalk_enabled') is not None:
-                if not self.config.get('dingtalk_enabled'):
-                    logger.info("钉钉通知已禁用（配置级别）")
-                    return None
-                if self.config.get('dingtalk_webhook') or self.config.get('dingtalk_url'):
-                    return self.config.get('dingtalk_webhook') or self.config.get('dingtalk_url')
-            
-            # 使用统一的配置获取方法，支持三级回退
-            config = WebhookService.get_webhook_config_with_fallback(
-                gitlab_base_url=gitlab_base_url,
-                project_slug=project_slug,
-                branch_name=branch_name,
-                project_name=project_name,
-                url_slug=url_slug
-            )
-            
-            # 检查是否启用钉钉通知
-            if config and config.get('dingtalk_enabled') is not None:
-                if not config.get('dingtalk_enabled'):
-                    logger.info("钉钉通知已禁用（配置级别）")
-                    return None
-            
-            # 从配置中获取钉钉URL
-            if config and config.get('dingtalk_url'):
-                return config.get('dingtalk_url')
-        except Exception as e:
-            logger.debug(f"获取配置失败: {e}")
+        # 如果未提供 project_name，直接返回默认的 Webhook URL
+        if not project_name:
+            if self.default_webhook_url:
+                return self.default_webhook_url
+            else:
+                raise ValueError("未提供项目名称，且未设置默认的钉钉 Webhook URL。")
 
-        # 兼容旧的环境变量查找逻辑（用于向后兼容）
-        if not gitlab_base_url and not project_slug and (project_name or url_slug):
-            def normalize(s: Optional[str]) -> str:
-                if not s:
-                    return ''
-                return re.sub(r'[^A-Z0-9]+', '_', s.upper())
+        # 构造目标键
+        target_key_project = f"DINGTALK_WEBHOOK_URL_{project_name.upper()}"
+        target_key_url_slug = f"DINGTALK_WEBHOOK_URL_{url_slug.upper()}"
 
-            norm_project = normalize(project_name)
-            norm_slug = normalize(url_slug)
+        # 遍历环境变量
+        for env_key, env_value in os.environ.items():
+            env_key_upper = env_key.upper()
+            if env_key_upper == target_key_project:
+                return env_value  # 找到项目名称对应的 Webhook URL，直接返回
+            if env_key_upper == target_key_url_slug:
+                return env_value  # 找到 GitLab URL 对应的 Webhook URL，直接返回
 
-            candidates = []
-            for key in (norm_project, norm_slug):
-                if not key:
-                    continue
-                candidates.extend([
-                    f"DINGTALK_WEBHOOK_URL_{key}",
-                    f"DINGTALK_WEBHOOK_{key}",
-                ])
-            candidates.extend(["DINGTALK_WEBHOOK_URL", "DINGTALK_WEBHOOK_URL_DEFAULT", "DINGTALK_WEBHOOK"])
-
-            for cand in candidates:
-                val = os.environ.get(cand)
-                if val:
-                    return val
-
-        # 最终回退：使用默认URL
+        # 如果未找到匹配的环境变量，降级使用全局的 Webhook URL
         if self.default_webhook_url:
             return self.default_webhook_url
 
-        raise ValueError("未找到钉钉 Webhook URL，请检查配置。")
+        # 如果既未找到匹配项，也没有默认值，抛出异常
+        raise ValueError(f"未找到项目 '{project_name}' 对应的钉钉Webhook URL，且未设置默认的 Webhook URL。")
 
-    def _sign_url(self, url: str) -> str:
-        if not self.secret:
-            return url
+    def send_message(self, content: str, msg_type='text', title='通知', is_at_all=False, project_name=None, url_slug = None):
+        if not self.enabled:
+            logger.info("钉钉推送未启用")
+            return
+
         try:
-            timestamp = str(int(time.time() * 1000))
-            secret_enc = self.secret.encode('utf-8')
-            string_to_sign = f"{timestamp}\n{self.secret}"
-            string_to_sign_enc = string_to_sign.encode('utf-8')
-            hmac_code = hmac.new(secret_enc, string_to_sign_enc, digestmod=hashlib.sha256).digest()
-            sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-            sep = '&' if '?' in url else '?'
-            return f"{url}{sep}timestamp={timestamp}&sign={sign}"
-        except Exception:
-            return url
-
-    def send_message(self, content: str, msg_type: str = 'text', title: str = '通知', is_at_all: bool = False,
-                     gitlab_base_url: Optional[str] = None, project_slug: Optional[str] = None,
-                     branch_name: Optional[str] = None, project_name: Optional[str] = None, 
-                     url_slug: Optional[str] = None):
-        try:
-            post_url = self._get_webhook_url(
-                gitlab_base_url=gitlab_base_url,
-                project_slug=project_slug,
-                branch_name=branch_name,
-                project_name=project_name,
-                url_slug=url_slug
-            )
-            
-            # 如果 webhook URL 为 None（已禁用），直接返回
-            if post_url is None:
-                return
-            
-            post_url = self._sign_url(post_url)
-
-            headers = {"Content-Type": "application/json; charset=utf-8"}
+            post_url = self._get_webhook_url(project_name=project_name, url_slug=url_slug)
+            headers = {
+                "Content-Type": "application/json",
+                "Charset": "UTF-8"
+            }
             if msg_type == 'markdown':
-                payload = {"msgtype": "markdown", "markdown": {"title": title, "text": content}, "at": {"isAtAll": is_at_all}}
+                message = {
+                    "msgtype": "markdown",
+                    "markdown": {
+                        "title": title,  # Customize as needed
+                        "text": content
+                    },
+                    "at": {
+                        "isAtAll": is_at_all
+                    }
+                }
             else:
-                payload = {"msgtype": "text", "text": {"content": content}, "at": {"isAtAll": is_at_all}}
-
-            logger.debug(f"发送钉钉消息: url={self._mask_url(post_url)}, payload={payload}")
-            resp = requests.post(post_url, json=payload, headers=headers, timeout=10)
-            try:
-                result = resp.json()
-            except ValueError:
-                result = {"errmsg": resp.text}
-
-            if result.get('errmsg') in ('ok', 'success') or result.get('errcode') == 0:
-                logger.info(f"钉钉消息发送成功! webhook_url:{self._mask_url(post_url)}")
+                message = {
+                    "msgtype": "text",
+                    "text": {
+                        "content": content
+                    },
+                    "at": {
+                        "isAtAll": is_at_all
+                    }
+                }
+            response = requests.post(url=post_url, data=json.dumps(message), headers=headers)
+            response_data = response.json()
+            if response_data.get('errmsg') == 'ok':
+                logger.info(f"钉钉消息发送成功! webhook_url:{post_url}")
             else:
-                logger.error(f"钉钉消息发送失败! webhook_url:{self._mask_url(post_url)}, errmsg:{result}")
+                logger.error(f"钉钉消息发送失败! webhook_url:{post_url},errmsg:{response_data.get('errmsg')}")
         except Exception as e:
-            logger.error(f"钉钉消息发送失败! {e}")
-
-    @staticmethod
-    def _mask_url(u: str) -> str:
-        if not u:
-            return u
-        try:
-            p = urllib.parse.urlparse(u)
-            qs = urllib.parse.parse_qsl(p.query, keep_blank_values=True)
-            if qs:
-                masked_qs = [(k, '***') for k, v in qs]
-                new_query = urllib.parse.urlencode(masked_qs)
-                return urllib.parse.urlunparse((p.scheme, p.netloc, p.path, p.params, new_query, p.fragment))
-            parts = p.path.rstrip('/').split('/')
-            if parts and len(parts[-1]) > 3:
-                parts[-1] = '***'
-                new_path = '/'.join(parts)
-                return urllib.parse.urlunparse((p.scheme, p.netloc, new_path, p.params, p.query, p.fragment))
-            return u
-        except Exception:
-            return '***'
+            logger.error(f"钉钉消息发送失败! ", e)

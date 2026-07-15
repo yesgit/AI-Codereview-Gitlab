@@ -1,63 +1,26 @@
-assets/external/
-*.py[cod]
-.web
-*.db
-.states
-# OS
 .DS_Store
-Thumbs.db
-
-# Python virtualenvs
-.venv/
 venv/
-
-# Tests
+.venv/
 test/
-
-# IDEs
 .idea/
-.vscode/
-!.vscode/settings.json
 
-# Logs and runtime data
-log/
+log/*
 !log/.gitkeep
-data/
+data/*
 !data/.gitkeep
-mysql_data/
 
-# Config
 conf/.env
-
-# Local env files
-.env
-.env.*
-
-# Python bytecode
-*.pyc
+.pyc
 __pycache__/
-
-# Cursor
+.agents/
 .cursorignore
 .cursor
+.claude/
+openspec/
 
-# Python tooling caches
-.pytest_cache/
-.mypy_cache/
-htmlcov/
+# Agentic mode local repo cache
+data/repo_cache/
+
+# Test coverage artifact
 .coverage
-
-# Packaging
-*.egg-info/
-dist/
-build/
-pip-wheel-metadata/
-
-# Docker overrides
-docker-compose.override.yml
-
-# Node modules
-node_modules/
-
-# cline
-.clinerules
+.pytest_cache/

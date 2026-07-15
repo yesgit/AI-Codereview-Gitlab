@@ -1,322 +1,253 @@
-# AI Code Review for GitLab
+![Push图片](doc/img/open/ai-codereview-cartoon.png)
 
-AI 代码审查平台，支持 GitLab、GitHub、Gitea，通过 Webhook 自动审查代码。
+[开源版](README.md) | 
+[Pro版](doc/pro.md)
 
-## 功能特性
+## 项目简介
 
-- 🤖 **AI 驱动代码审查**：支持多种 LLM（OpenAI、DeepSeek、Qwen 等）
-- 🎯 **多种触发场景**：MR/Push 代码提交、定时每日报告
-- 📊 **可视化 Dashboard**：查看审查记录、统计数据
-- ⚙️ **灵活配置**：支持项目和分支级别的自定义配置
-- 🔔 **多渠道通知**：钉钉、飞书、企业微信、自定义 Webhook
-- 🎨 **现代化 UI**：使用 Ant Design 组件库，Modal 弹窗表单
-- 🔐 **用户认证**：基于 JWT 的安全认证系统
+本项目是一个基于大模型的自动化代码审查工具，帮助开发团队在代码合并或提交时，快速进行智能化的审查(Code Review)，提升代码质量和开发效率。
 
-## 技术栈
+## 功能
 
-### 后端
-- **FastAPI** - 高性能 Python Web 框架
-- **Pydantic v2** - 数据验证
-- **SQLAlchemy** - ORM
+- 🚀 多模型支持
+  - 兼容 DeepSeek、ZhipuAI、OpenAI、Anthropic、通义千问 和 Ollama，想用哪个就用哪个。
+- 📢 消息即时推送
+  - 审查结果一键直达 钉钉、企业微信 或 飞书，代码问题无处可藏！
+- 📅 自动化日报生成
+  - 基于 GitLab & GitHub & Gitea Commit 记录，自动整理每日开发进展，谁在摸鱼、谁在卷，一目了然 😼。
+- 📊 可视化 Dashboard
+  - 集中展示所有 Code Review 记录，项目统计、开发者统计，数据说话，甩锅无门！
+- 🎭 Review Style 任你选
+  - 专业型 🤵：严谨细致，正式专业。
+  - 讽刺型 😈：毒舌吐槽，专治不服（"这代码是用脚写的吗？"）
+  - 绅士型 🌸：温柔建议，如沐春风（"或许这里可以再优化一下呢~"）
+  - 幽默型 🤪：搞笑点评，快乐改码（"这段 if-else 比我的相亲经历还曲折！"）
+- 🤖 Agentic Review 模式（可选）
+  - LLM 拥有工具调用能力（`read_file` / 沙箱 `run_command`），
+    可在本地克隆的代码库内自主探索，产出更全面的 review 结果。
+  - shell 默认仅允许读类命令（`ls` / `cat` / `grep` / `find` / `git log` …），
+    沙箱 + 路径越界 + 30s 超时三重防护。
+  - 任意阶段失败（clone / fetch / LLM / 工具调用）自动降级回 `diff_only`，
+    保证至少返回与原版一致的 review。
+  - 详细配置与开销说明见下方 [Agentic Review Mode](#agentic-review-mode-可选)
 
-### 前端
-- **React 18** + TypeScript
-- **Vite** - 快速构建工具
-- **Ant Design** - 企业级 UI 组件库
+**效果图:**
 
-### 原有组件
-- `biz/` - 业务逻辑层
-- `conf/` - 配置文件
-- 数据库和 LLM 集成
+![MR图片](doc/img/open/mr.png)
 
-## 快速开始
+![Note图片](doc/img/open/note.jpg)
 
-### 使用 Docker Compose
+![Dashboard图片](doc/img/open/dashboard.jpg)
 
-```bash
-# 1. 复制环境变量配置
-cp conf/.env.dist .env
+## 原理
 
-# 2. 根据需要修改 .env 文件
-# vi .env
+当用户在 GitLab 上提交代码（如 Merge Request 或 Push 操作）时，GitLab 将自动触发 webhook
+事件，调用本系统的接口。系统随后通过第三方大模型对代码进行审查，并将审查结果直接反馈到对应的 Merge Request 或 Commit 的
+Note 中，便于团队查看和处理。
 
-# 3. 启动服务
-docker-compose up -d
+![流程图](doc/img/open/process.png)
 
-# 4. 查看日志
-docker-compose logs -f
+## 部署
 
-# 5. 停止服务
-docker-compose down
+### 方案一：Docker 部署
+
+**1. 准备环境文件**
+
+- 克隆项目仓库：
+```aiignore
+git clone https://github.com/sunmh207/AI-Codereview-Gitlab.git
+cd AI-Codereview-Gitlab
 ```
 
-服务启动后访问：
-- Dashboard: http://localhost:8080
-- API 文档: http://localhost:8000/docs
+- 创建配置文件：
+```aiignore
+cp conf/.env.dist conf/.env
+```
 
-### 本地开发
+- 编辑 conf/.env 文件，配置以下关键参数：
 
-**后端:**
 ```bash
-# 安装依赖
+#大模型供应商配置,支持 zhipuai , openai , deepseek 和 ollama
+LLM_PROVIDER=deepseek
+
+#DeepSeek
+DEEPSEEK_API_KEY={YOUR_DEEPSEEK_API_KEY}
+
+#支持review的文件类型(未配置的文件类型不会被审查)
+SUPPORTED_EXTENSIONS=.java,.py,.php,.yml,.vue,.go,.c,.cpp,.h,.js,.css,.md,.sql
+
+#钉钉消息推送: 0不发送钉钉消息,1发送钉钉消息
+DINGTALK_ENABLED=0
+DINGTALK_WEBHOOK_URL={YOUR_WDINGTALK_WEBHOOK_URL}
+
+#Gitlab配置
+GITLAB_ACCESS_TOKEN={YOUR_GITLAB_ACCESS_TOKEN}
+```
+
+**2. 启动服务**
+
+```bash
+docker-compose up -d
+```
+
+**3. 验证部署**
+
+- 主服务验证：
+  - 访问 http://your-server-ip:5001
+  - 显示 "The code review server is running." 说明服务启动成功。
+- Dashboard 验证：
+  - 访问 http://your-server-ip:5002
+  - 看到一个审查日志页面，说明 Dashboard 启动成功。
+
+### 方案二：本地Python环境部署
+
+**1. 获取源码**
+
+```bash
+git clone https://github.com/sunmh207/AI-Codereview-Gitlab.git
+cd AI-Codereview-Gitlab
+```
+
+**2. 安装依赖**
+
+使用 Python 环境（建议使用虚拟环境 venv）安装项目依赖(Python 版本：3.10+):
+
+```bash
 pip install -r requirements.txt
-
-# 启动后端
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**前端:**
-```bash
-cd frontend
+**3. 配置环境变量**
 
-# 安装依赖
-npm install
+同 Docker 部署方案中的.env 文件配置。
 
-# 启动前端
-npm run dev
-```
+**4. 启动服务**
 
-## 配置说明
-
-### 环境变量
-
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `DASHBOARD_USER` | Dashboard 登录用户名 | `admin` |
-| `DASHBOARD_PASSWORD` | Dashboard 登录密码 | `admin` |
-| `DASHBOARD_SECRET_KEY` | Token 签名密钥 | 自动生成 |
-| `OPENAI_API_KEY` | OpenAI API Key | - |
-| `ANTHROPIC_API_KEY` | Anthropic API Key | - |
-| `DEEPSEEK_API_KEY` | DeepSeek API Key | - |
-| `QWEN_API_KEY` | 通义千问 API Key | - |
-| `ZHIPUAI_API_KEY` | 智谱 AI API Key | - |
-| `OLLAMA_API_BASE_URL` | Ollama API 地址 | `http://host.docker.internal:11434` |
-| `OLLAMA_API_MODEL` | Ollama 模型名称 | `deepseek-r1:latest` |
-| `DEFAULT_LLM_PROVIDER` | 默认 LLM 提供商 | `deepseek` |
-| `DB_DRIVER` | 数据库类型 (sqlite/mysql) | `sqlite` |
-
-### 数据库配置
-
-**SQLite (默认):**
-```bash
-DB_DRIVER=sqlite
-DB_FILE=data/data.db
-```
-
-**MySQL:**
-```bash
-DB_DRIVER=mysql
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=your_password
-DB_NAME=ai_codereview
-```
-
-## Webhook 配置
-
-### GitLab
-
-在项目设置中添加 Webhook：
-
-1. 进入 `Settings` > `Webhooks`
-2. 填写 URL: `http://your-domain/api/v1/webhooks/gitlab`
-3. 选择触发事件：`Merge request events`
-4. 添加 Token（可选，用于验证）
-5. 点击保存
-
-### GitHub
-
-在项目设置中添加 Webhook：
-
-1. 进入 `Settings` > `Webhooks` > `Add webhook`
-2. Payload URL: `http://your-domain/api/v1/webhooks/github`
-3. Content type: `application/json`
-4. 选择触发事件：`Pull requests`
-5. 点击保存
-
-### Gitea
-
-在项目设置中添加 Webhook：
-
-1. 进入 `Settings` > `Webhooks` > `Add webhook`
-2. Target URL: `http://your-domain/api/v1/webhooks/gitea`
-3. 选择触发事件：`Pull Request`
-4. 点击保存
-
-## LLM 配置
-
-### OpenAI
-```bash
-OPENAI_API_KEY=sk-xxx
-OPENAI_API_BASE_URL=https://api.openai.com/v1
-OPENAI_API_MODEL=gpt-4o-mini
-DEFAULT_LLM_PROVIDER=openai
-```
-
-### DeepSeek
-```bash
-DEEPSEEK_API_KEY=sk-xxx
-DEEPSEEK_API_BASE_URL=https://api.deepseek.com
-DEEPSEEK_API_MODEL=deepseek-chat
-DEFAULT_LLM_PROVIDER=deepseek
-```
-
-### 通义千问
-```bash
-QWEN_API_KEY=sk-xxx
-QWEN_API_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-QWEN_API_MODEL=qwen-coder-plus
-DEFAULT_LLM_PROVIDER=qwen
-```
-
-### Ollama
-```bash
-OLLAMA_API_BASE_URL=http://host.docker.internal:11434
-OLLAMA_API_MODEL=deepseek-r1:latest
-DEFAULT_LLM_PROVIDER=ollama
-```
-
-### Anthropic Claude
-```bash
-ANTHROPIC_API_KEY=sk-xxx
-ANTHROPIC_API_BASE_URL=https://api.anthropic.com
-ANTHROPIC_API_MODEL=claude-sonnet-4-5-20250929
-DEFAULT_LLM_PROVIDER=anthropic
-```
-
-## API 端点
-
-### 认证
-- `POST /api/v1/auth/login` - 用户登录
-- `GET /api/v1/auth/me` - 获取当前用户
-
-### 项目配置
-- `GET /api/v1/webhooks` - 获取所有配置
-- `POST /api/v1/webhooks` - 创建配置
-- `PUT /api/v1/webhooks/{id}` - 更新配置
-- `DELETE /api/v1/webhooks/{id}` - 删除配置
-
-### 分支配置
-- `GET /api/v1/branch-webhooks` - 获取所有配置
-- `POST /api/v1/branch-webhooks` - 创建配置
-- `PUT /api/v1/branch-webhooks/{id}` - 更新配置
-- `DELETE /api/v1/branch-webhooks/{id}` - 删除配置
-
-### 查询统计
-- `GET /api/v1/reviews/mr` - MR 审查记录
-- `GET /api/v1/reviews/push` - Push 审查记录
-- `GET /api/v1/reviews/stats` - 统计数据
-
-### Webhook 接收
-- `POST /api/v1/webhooks/gitlab` - GitLab Webhook
-- `POST /api/v1/webhooks/github` - GitHub Webhook
-- `POST /api/v1/webhooks/gitea` - Gitea Webhook
-
-## 项目结构
-
-```
-.
-├── api/                 # FastAPI 后端
-│   ├── main.py         # 主入口
-│   └── routers/        # 路由模块
-│       ├── auth.py      # 认证
-│       ├── webhooks.py  # 项目配置
-│       ├── branch_webhooks.py  # 分支配置
-│       └── reviews.py   # 查询统计
-├── frontend/           # React 前端
-│   ├── src/
-│   │   ├── pages/      # 页面组件
-│   │   ├── components/ # 公共组件
-│   │   ├── api/        # API 调用
-│   │   ├── types/      # 类型定义
-│   │   └── utils/      # 工具函数
-│   ├── Dockerfile
-│   └── nginx.conf
-├── biz/               # 业务逻辑
-│   ├── llm/          # LLM 客户端
-│   ├── service/      # 服务层
-│   ├── platforms/    # 平台适配
-│   └── utils/       # 工具函数
-├── alembic/         # 数据库迁移
-├── conf/            # 配置文件
-│   ├── .env.dist   # 环境变量模板
-│   ├── prompt_templates.yml
-│   └── supervisord.conf
-└── docker-compose.yml
-```
-
-## UI 改进
-
-### Modal 弹窗表单
-
-新版本使用 Ant Design Modal 组件，确保新建/编辑表单正常弹出：
-
-| 特性 | Streamlit 版本 | 新版本 |
-|--------|----------------|--------|
-| 表单弹出 | ❌ 在页面展开 | ✅ Modal 弹窗 |
-| 现代化 UI | ❌ Streamlit 风格 | ✅ Ant Design |
-| 前后端分离 | ❌ 一体化 | ✅ 分离架构 |
-| 开发体验 | ❌ 重载慢 | ✅ HMR 快速 |
-| 类型安全 | ❌ 无类型检查 | ✅ TypeScript |
-
-## Dashboard 功能
-
-### 1. 认证系统
-- 基于 JWT 的用户认证
-- Token 有效期管理（30天）
-- 安全的密码存储和验证
-
-### 2. 项目配置管理
-- 支持通过 GitLab URL + Slug 配置项目
-- 支持传统方式（project_name、url_slug）
-- 钉钉、飞书、企业微信 Webhook 配置
-- 自定义 Prompt 配置
-- GitLab Token 配置
-
-### 3. 分支配置管理
-- 按分支模式配置通知（如 `feature/*`）
-- 支持通配符匹配（`*` 和 `?`）
-- 完整的 Webhook 和 Prompt 配置
-
-### 4. 查询统计
-- MR 和 Push 审查记录查询
-- 按作者、项目、时间筛选
-- 统计分析图表
-- 代码行数统计
-
-## Docker 部署
-
-### 构建镜像
+- 启动API服务：
 
 ```bash
-# 构建后端
-docker build -t ai-codereview-api .
-
-# 构建前端
-cd frontend && docker build -t ai-codereview-frontend .
+python api.py
 ```
 
-### 使用 Docker Compose
+- 启动Dashboard服务：
 
 ```bash
-# 后台启动
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-
-# 停止
-docker-compose down
-
-# 重新构建并启动
-docker-compose up -d --build
+streamlit run ui.py --server.port=5002 --server.address=0.0.0.0
 ```
 
-## 贡献指南
+### 配置 GitLab Webhook
 
-欢迎提交 Issue 和 Pull Request！
+#### 1. 创建Access Token
 
-## 许可证
+方法一：在 GitLab 个人设置中，创建一个 Personal Access Token。
 
-MIT License
+方法二：在 GitLab 项目设置中，创建Project Access Token
+
+#### 2. 配置 Webhook
+
+在 GitLab 项目设置中，配置 Webhook：
+
+- URL：http://your-server-ip:5001/review/webhook
+- Trigger Events：勾选 Push Events 和 Merge Request Events (不要勾选其它Event)
+- Secret Token：上面配置的 Access Token(可选)
+
+**备注**
+
+1. Token使用优先级
+  - 系统优先使用 .env 文件中的 GITLAB_ACCESS_TOKEN。
+  - 如果 .env 文件中没有配置 GITLAB_ACCESS_TOKEN，则使用 Webhook 传递的Secret Token。
+2. 网络访问要求
+  - 请确保 GitLab 能够访问本系统。
+  - 若内网环境受限，建议将系统部署在外网服务器上。
+
+### 配置消息推送
+
+#### 1.配置钉钉推送
+
+- 在钉钉群中添加一个自定义机器人，获取 Webhook URL。
+- 更新 .env 中的配置：
+  ```
+  #钉钉配置
+  DINGTALK_ENABLED=1  #0不发送钉钉消息，1发送钉钉消息
+  DINGTALK_WEBHOOK_URL=https://oapi.dingtalk.com/robot/send?access_token=xxx #替换为你的Webhook URL
+  ```
+
+企业微信和飞书推送配置类似，具体参见 [常见问题](doc/faq.md)
+
+## 常见问题
+
+**1.如何对整个代码库进行Review?**
+
+可以通过命令行工具对整个代码库进行审查。当前功能仍在不断完善中，欢迎试用并反馈宝贵意见！具体操作如下：
+
+```bash
+python -m biz.cmd.review
+```
+
+运行后，请按照命令行中的提示进行操作即可。
+
+**2.其它常见问题**
+
+参见 [常见问题](doc/faq.md)
+
+## Agentic Review Mode (可选)
+
+`REVIEW_STRATEGY` 环境变量切换两种 review 策略：
+
+- `diff_only`（默认）：仅对 diff 做 review，行为与原版完全一致。
+- `agentic`：LLM 拥有工具调用能力（read_file / 沙箱 shell），
+  可在本地克隆的代码库内自主探索，产出更全面的 review 结果。
+
+启用 agentic 模式：
+
+```bash
+REVIEW_STRATEGY=agentic
+REPO_CACHE_DIR=/var/data/repo_cache   # 可选，默认 data/repo_cache/
+AGENT_MAX_ITERATIONS=20               # 可选，默认 20
+```
+
+agentic 模式会按需在 `REPO_CACHE_DIR` 下克隆/更新目标项目（约 10MB~2GB / 项目）。
+任意阶段失败（clone / fetch / LLM / 工具调用异常）都会自动降级回 `diff_only`，
+保证至少返回与原版一致的 review。
+
+agentic 模式的额外开销：
+
+- 磁盘：建议预留 ≥ 50GB
+- 内存：单次 session 峰值 ~500MB
+- Token：单次 review 平均 5k - 50k tokens（diff_only 的 3 - 10 倍）
+- 时延：30s~5min / review
+
+⚠️ shell 工具有沙箱（命令白名单 + 黑名单 + 路径越界检查 + 30s 超时），
+默认只允许读类命令；如需放开请通过 `AGENT_SHELL_ALLOWLIST` / `AGENT_SHELL_BLOCKLIST` 调整。
+
+## 相关项目
+
+### 1. Code Review Pro 版
+
+功能更丰富的 AI Code Review 版本。
+
+项目介绍与使用说明：[Code Review Pro 版](doc/pro.md)
+
+快速安装命令：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sunmh207/AI-Codereview-Gitlab/refs/heads/main/scripts/pro/install.sh | bash
+```
+
+### 2. Entire Dashboard
+
+如果你正在使用 AI Agent 开发工具 (如: Cursor、Claude Code、Codex ...)，并希望对人机交互过程进行全面的记录与回溯分析，推荐使用 [Entire Dashboard](https://github.com/sunmh207/entire-dashboard)。该项目提供了完整的人机交互记录与可视化分析功能，可帮助你深入理解 AI Agent 的使用模式，优化交互体验，提升开发效率。
+
+## 交流
+
+若本项目对您有帮助，欢迎 Star ⭐️ 或 Fork。 有任何问题或建议，欢迎提交 Issue 或 PR。
+
+也欢迎加微信/微信群，一起交流学习。
+
+<p float="left">
+  <img src="doc/img/open/wechat.jpg" width="400" />
+  <img src="doc/img/open/wechat_group.jpg" width="400" /> 
+</p>
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=sunmh207/AI-Codereview-Gitlab&type=Timeline)](https://www.star-history.com/#sunmh207/AI-Codereview-Gitlab&Timeline)

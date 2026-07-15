@@ -1,79 +1,15 @@
-version: '3.8'
-
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-      target: app
-    image: hedw/ai-codereview-gitlab:1.4.18
-    container_name: ai-codereview-api
+    image: ghcr.io/sunmh207/ai-codereview-gitlab:1.5.1
     ports:
-      - "5002:5001" # FastAPI (serves frontend) - 临时改用 5002 端口避免冲突
+      - "5001:5001"
+      - "5002:5002"
     volumes:
       - ./data:/app/data
       - ./log:/app/log
     env_file:
       - ./conf/.env
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - ai-codereview-network
     restart: unless-stopped
-
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: worker
-    image: hedw/ai-codereview-gitlab:1.4.18-worker
-    volumes:
-      - ./data:/app/data
-      - ./log:/app/log
-    environment:
-      - SKIP_DB_MIGRATION=true
-    env_file:
-      - ./conf/.env
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - ai-codereview-network
-    restart: unless-stopped
-
-  redis:
-    image: redis:alpine
-    container_name: ai-codereview-redis
-    # ports:移除端口映射，容器间通信不需要暴露到主机
-    #   - "6379:6379"
-    networks:
-      - ai-codereview-network
-    restart: unless-stopped
-
-  mysql:
-    image: mysql:8.0
-    container_name: ai-codereview-mysql
-    env_file:
-      - ./conf/.env
-    volumes:
-      - ./mysql_data:/var/lib/mysql
-    # ports:移除端口映射，容器间通信不需要暴露到主机
-    #   - "3306:3306"
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uaiuser", "-paipassword"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
-    networks:
-      - ai-codereview-network
-    restart: unless-stopped
-
-networks:
-  ai-codereview-network:
-    driver: bridge
