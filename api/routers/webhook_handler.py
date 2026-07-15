@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request, HTTPException, Header
 from urllib.parse import urlparse
 
 from biz.gitlab.webhook_handler import slugify_url
+from biz.service.webhook_service import WebhookService
 from biz.queue.worker import (
     handle_merge_request_event,
     handle_push_event,
@@ -96,17 +97,29 @@ async def handle_gitlab_webhook(data: dict, request: Request):
 
     gitlab_url_slug = slugify_url(gitlab_url)
 
+    # 查项目配置，获取评论目标（镜像场景）
+    project_slug = data.get('project', {}).get('path_with_namespace', '')
+    comment_url = gitlab_url
+    comment_token = gitlab_token
+    if project_slug:
+        config = WebhookService.get_webhook_mapping_by_gitlab_project(
+            gitlab_url.rstrip('/'), project_slug
+        )
+        if config and config.get('comment_enabled') and config.get('comment_url'):
+            comment_url = config.get('comment_url')
+            comment_token = config.get('comment_token') or gitlab_token
+
     logger.info(f'Received event: {object_kind}')
     logger.info(f'Payload: {data}')
 
     if object_kind == "merge_request":
-        handle_queue(handle_merge_request_event, data, gitlab_token, gitlab_url, gitlab_url_slug)
+        handle_queue(handle_merge_request_event, data, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token)
         return {"message": f'Request received(object_kind={object_kind}), will process asynchronously.'}, 200
     elif object_kind == "push":
-        handle_queue(handle_push_event, data, gitlab_token, gitlab_url, gitlab_url_slug)
+        handle_queue(handle_push_event, data, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token)
         return {"message": f'Request received(object_kind={object_kind}), will process asynchronously.'}, 200
     elif object_kind == "note":
-        handle_queue(handle_note_event, data, gitlab_token, gitlab_url, gitlab_url_slug)
+        handle_queue(handle_note_event, data, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token)
         return {"message": f'Request received(object_kind={object_kind}), will process asynchronously.'}, 200
     else:
         error_message = f'Only merge_request, push and note events are supported (both Webhook and System Hook), but received: {object_kind}.'

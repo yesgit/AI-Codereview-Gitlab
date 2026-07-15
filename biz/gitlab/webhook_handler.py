@@ -1,7 +1,7 @@
 import os
 import re
 import time
-from urllib.parse import urljoin
+from urllib.parse import urljoin, quote
 import fnmatch
 import requests
 
@@ -66,11 +66,16 @@ def _normalize_base_url(u: str) -> str:
 
 
 class MergeRequestHandler:
-    def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str):
+    def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str,
+                 comment_url: str = None, comment_token: str = None):
         self.merge_request_iid = None
         self.webhook_data = webhook_data
         self.gitlab_token = gitlab_token
         self.gitlab_url = gitlab_url
+        self.comment_url = comment_url or gitlab_url
+        self.comment_token = comment_token or gitlab_token
+        # 项目路径（URL-encoded），用于跨实例评论 API 调用
+        self.project_path = webhook_data.get('project', {}).get('path_with_namespace', '')
         self.event_type = None
         self.project_id = None
         self.action = None
@@ -152,13 +157,15 @@ class MergeRequestHandler:
             return []
 
     def add_merge_request_notes(self, review_result):
-        base = _normalize_base_url(self.gitlab_url)
+        base = _normalize_base_url(self.comment_url)
         if not base:
-            logger.error("gitlab_url not configured; cannot add merge request notes")
+            logger.error("comment_url not configured; cannot add merge request notes")
             return
-        url = urljoin(base, f"api/v4/projects/{self.project_id}/merge_requests/{self.merge_request_iid}/notes")
+        # 使用 URL-encoded project_path 而非数字 project_id，确保跨实例兼容
+        project_ref = quote(self.project_path, safe='') if self.project_path else str(self.project_id)
+        url = urljoin(base, f"api/v4/projects/{project_ref}/merge_requests/{self.merge_request_iid}/notes")
         headers = {
-            'Private-Token': self.gitlab_token,
+            'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
         }
         data = {
@@ -195,10 +202,14 @@ class MergeRequestHandler:
 
 
 class NoteHandler:
-    def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str):
+    def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str,
+                 comment_url: str = None, comment_token: str = None):
         self.webhook_data = webhook_data
         self.gitlab_token = gitlab_token
         self.gitlab_url = gitlab_url
+        self.comment_url = comment_url or gitlab_url
+        self.comment_token = comment_token or gitlab_token
+        self.project_path = webhook_data.get('project', {}).get('path_with_namespace', '')
         self.event_type = None
         self.note_type = None  # Commit 或 MergeRequest
         self.note_body = None
@@ -307,21 +318,22 @@ class NoteHandler:
         if not self.commit_id:
             logger.error("Commit ID not found, cannot add comment")
             return
-        
-        base = _normalize_base_url(self.gitlab_url)
+
+        project_ref = quote(self.project_path, safe='') if self.project_path else str(self.project_id)
+        base = _normalize_base_url(self.comment_url)
         if not base:
-            logger.error("gitlab_url not configured; cannot add commit comment")
+            logger.error("comment_url not configured; cannot add commit comment")
             return
-        
-        url = urljoin(base, f"api/v4/projects/{self.project_id}/repository/commits/{self.commit_id}/comments")
+
+        url = urljoin(base, f"api/v4/projects/{project_ref}/repository/commits/{self.commit_id}/comments")
         headers = {
-            'Private-Token': self.gitlab_token,
+            'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
         }
         data = {
             'note': message
         }
-        
+
         response = requests.post(url, headers=headers, json=data, verify=False)
         logger.debug(f"Add comment to commit {self.commit_id}: {response.status_code}")
         if response.status_code == 201:
@@ -335,21 +347,22 @@ class NoteHandler:
         if not self.mr_iid or not self.project_id:
             logger.error("MR IID or project ID not found, cannot add comment")
             return
-        
-        base = _normalize_base_url(self.gitlab_url)
+
+        project_ref = quote(self.project_path, safe='') if self.project_path else str(self.project_id)
+        base = _normalize_base_url(self.comment_url)
         if not base:
-            logger.error("gitlab_url not configured; cannot add MR comment")
+            logger.error("comment_url not configured; cannot add MR comment")
             return
-        
-        url = urljoin(base, f"api/v4/projects/{self.project_id}/merge_requests/{self.mr_iid}/notes")
+
+        url = urljoin(base, f"api/v4/projects/{project_ref}/merge_requests/{self.mr_iid}/notes")
         headers = {
-            'Private-Token': self.gitlab_token,
+            'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
         }
         data = {
             'body': message
         }
-        
+
         response = requests.post(url, headers=headers, json=data, verify=False)
         logger.debug(f"Add comment to MR {self.mr_iid}: {response.status_code}")
         if response.status_code == 201:
@@ -360,10 +373,14 @@ class NoteHandler:
 
 
 class PushHandler:
-    def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str):
+    def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str,
+                 comment_url: str = None, comment_token: str = None):
         self.webhook_data = webhook_data
         self.gitlab_token = gitlab_token
         self.gitlab_url = gitlab_url
+        self.comment_url = comment_url or gitlab_url
+        self.comment_token = comment_token or gitlab_token
+        self.project_path = webhook_data.get('project', {}).get('path_with_namespace', '')
         self.event_type = None
         self.project_id = None
         self.branch_name = None
@@ -416,10 +433,14 @@ class PushHandler:
             logger.error("Last commit ID not found.")
             return
 
-        url = urljoin(f"{self.gitlab_url}/",
-                      f"api/v4/projects/{self.project_id}/repository/commits/{last_commit_id}/comments")
+        project_ref = quote(self.project_path, safe='') if self.project_path else str(self.project_id)
+        base = _normalize_base_url(self.comment_url)
+        if not base:
+            logger.error("comment_url not configured; cannot add push notes")
+            return
+        url = urljoin(base, f"api/v4/projects/{project_ref}/repository/commits/{last_commit_id}/comments")
         headers = {
-            'Private-Token': self.gitlab_token,
+            'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
         }
         data = {

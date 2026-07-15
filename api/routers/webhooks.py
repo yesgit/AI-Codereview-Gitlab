@@ -40,6 +40,9 @@ class WebhookCreate(BaseModel):
     review_style: Optional[str] = None
     daily_report_enabled: Optional[bool] = None
     supported_extensions: Optional[str] = None
+    comment_enabled: Optional[bool] = None
+    comment_url: Optional[str] = None
+    comment_token: Optional[str] = None
 
 
 class WebhookUpdate(BaseModel):
@@ -59,6 +62,9 @@ class WebhookUpdate(BaseModel):
     review_style: Optional[str] = None
     daily_report_enabled: Optional[bool] = None
     supported_extensions: Optional[str] = None
+    comment_enabled: Optional[bool] = None
+    comment_url: Optional[str] = None
+    comment_token: Optional[str] = None
 
 
 class WebhookResponse(BaseModel):
@@ -79,6 +85,9 @@ class WebhookResponse(BaseModel):
     review_style: Optional[str] = None
     daily_report_enabled: Optional[bool] = None
     supported_extensions: Optional[str] = None
+    comment_enabled: Optional[bool] = None
+    comment_url: Optional[str] = None
+    comment_token: Optional[str] = None
     created_at: Optional[int] = None
     updated_at: Optional[int] = None
 
@@ -150,9 +159,12 @@ async def create_webhook(webhook: WebhookCreate, current_user: str = Depends(get
         gitlab_token=webhook.gitlab_token,
         review_style=webhook.review_style,
         daily_report_enabled=webhook.daily_report_enabled,
-        supported_extensions=webhook.supported_extensions
+        supported_extensions=webhook.supported_extensions,
+        comment_enabled=webhook.comment_enabled,
+        comment_url=webhook.comment_url,
+        comment_token=webhook.comment_token
     )
-    
+
     if not result:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -202,9 +214,12 @@ async def update_webhook(webhook_id: int, webhook: WebhookUpdate, current_user: 
         gitlab_token=webhook.gitlab_token,
         review_style=webhook.review_style,
         daily_report_enabled=webhook.daily_report_enabled,
-        supported_extensions=webhook.supported_extensions
+        supported_extensions=webhook.supported_extensions,
+        comment_enabled=webhook.comment_enabled,
+        comment_url=webhook.comment_url,
+        comment_token=webhook.comment_token
     )
-    
+
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -453,6 +453,63 @@ const Webhooks: React.FC = () => {
                 ),
               },
               {
+                key: 'comment',
+                label: '💬 评论配置',
+                children: (
+                  <div style={{ padding: '8px 0' }}>
+                    <Form.Item
+                      label="评论到其他地址"
+                      name="comment_enabled"
+                      valuePropName="checked"
+                      tooltip="开启后，AI 评审评论将发送到下方配置的非默认 GitLab 实例（适用于仓库镜像场景）。关闭时评论默认发回 WebHook 源地址。"
+                    >
+                      <Switch />
+                    </Form.Item>
+
+                    <Form.Item
+                      noStyle
+                      shouldUpdate={(prevValues, currentValues) =>
+                        prevValues.comment_enabled !== currentValues.comment_enabled
+                      }
+                    >
+                      {({ getFieldValue }) =>
+                        getFieldValue('comment_enabled') ? (
+                          <>
+                            <Form.Item
+                              label="评论目标 URL"
+                              name="comment_url"
+                              tooltip="评论发布的目标 GitLab 实例地址，如 https://mirror-gitlab.example.com"
+                              rules={[
+                                {
+                                  validator: (_, value) => {
+                                    if (!value) return Promise.resolve();
+                                    const urlPattern = /^(https?:\/\/)?([^\/]+)(\/.*)?$/;
+                                    if (!urlPattern.test(value)) {
+                                      return Promise.reject(new Error('请输入有效的 URL'));
+                                    }
+                                    return Promise.resolve();
+                                  },
+                                },
+                              ]}
+                            >
+                              <Input placeholder="https://mirror-gitlab.example.com" />
+                            </Form.Item>
+
+                            <Form.Item
+                              label="评论目标 Token"
+                              name="comment_token"
+                              tooltip="目标 GitLab 实例的 Access Token。不填则使用源实例的 Token。"
+                            >
+                              <Input.Password placeholder="目标实例的 Personal Access Token" />
+                            </Form.Item>
+                          </>
+                        ) : null
+                      }
+                    </Form.Item>
+                  </div>
+                ),
+              },
+              {
                 key: 'advanced',
                 label: '⚙️ 高级配置',
                 children: (

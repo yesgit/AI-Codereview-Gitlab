@@ -33,6 +33,9 @@ export interface Webhook {
   gitlab_token?: string;
   daily_report_enabled?: boolean;
   supported_extensions?: string;
+  comment_enabled?: boolean;
+  comment_url?: string;
+  comment_token?: string;
   created_at?: number;
   updated_at?: number;
 }
@@ -55,6 +58,9 @@ export interface WebhookForm {
   review_style?: string;
   daily_report_enabled?: boolean;
   supported_extensions?: string;
+  comment_enabled?: boolean;
+  comment_url?: string;
+  comment_token?: string;
 }
 
 export interface BranchWebhook {
