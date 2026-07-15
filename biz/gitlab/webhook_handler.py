@@ -477,12 +477,6 @@ class PushHandler:
                 f"Failed to get commits for ref {ref_name}: {response.status_code}, {response.text}")
             return []
 
-    def get_parent_commit_id(self, commit_id: str) -> str:
-        commits = self.__repository_commits(ref_name=commit_id, pre_page=1, page=1)
-        if commits and commits[0].get('parent_ids', []):
-            return commits[0].get('parent_ids', [])[0]
-        return ""
-
     def repository_compare(self, before: str, after: str):
         # 比较两个提交之间的差异
         base = _normalize_base_url(self.gitlab_url)
@@ -543,23 +537,28 @@ class PushHandler:
         if not self.commit_list:
             logger.info("No commits found in push event.")
             return []
-        headers = {
-            'Private-Token': self.gitlab_token
-        }
 
-        # 优先尝试compare API获取变更
         before = self.webhook_data.get('before', '')
         after = self.webhook_data.get('after', '')
-        if before and after:
-            if after.startswith('0000000'):
-                # 删除分支处理
-                return []
-            if before.startswith('0000000'):
-                # 创建分支处理
-                first_commit_id = self.commit_list[0].get('id')
-                parent_commit_id = self.get_parent_commit_id(first_commit_id)
-                if parent_commit_id:
-                    before = parent_commit_id
-            return self.repository_compare(before, after)
-        else:
+
+        if not before or not after:
+            logger.warn("Missing before or after commit SHA in webhook data.")
             return []
+
+        if after.startswith('0000000'):
+            # 删除分支处理
+            logger.info("Branch deletion detected, no changes to review.")
+            return []
+
+        if before.startswith('0000000'):
+            # 创建分支处理 - 使用单个提交的 diff API
+            logger.info("New branch creation detected, using commit diff API.")
+            if self.commit_list:
+                latest_commit_id = after
+                return self.get_commit_diff(latest_commit_id)
+            else:
+                return []
+        else:
+            # 正常的提交范围比较 - 使用 compare API
+            logger.info(f"Comparing commits from {before} to {after}")
+            return self.repository_compare(before, after)
