@@ -1,6 +1,9 @@
 """
 FastAPI 主应用入口
 """
+from dotenv import load_dotenv
+load_dotenv("conf/.env")
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles

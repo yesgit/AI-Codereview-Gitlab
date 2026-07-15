@@ -9,7 +9,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./log:/app/log
-      - ./conf/.env:/app/conf/.env:ro
-    environment:
-      - TZ=Asia/Shanghai
+    env_file:
+      - ./conf/.env
     restart: unless-stopped
