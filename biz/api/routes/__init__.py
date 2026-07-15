@@ -1,14 +1,4 @@
 """
-路由注册模块
+路由注册模块（已迁移到 FastAPI api/routers/，此文件保留兼容）
 """
-from biz.api.routes import home, daily_report, webhook, admin_webhooks
-
-
-def register_routes(app):
-    """
-    注册所有路由到 Flask 应用
-    """
-    app.register_blueprint(home.home_bp)
-    app.register_blueprint(daily_report.daily_report_bp)
-    app.register_blueprint(webhook.webhook_bp)
-    app.register_blueprint(admin_webhooks.admin_bp)
+# 旧 Flask blueprint 注册已废弃，不再导入

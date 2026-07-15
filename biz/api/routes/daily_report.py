@@ -1,17 +1,14 @@
 """
-日报路由模块
+日报逻辑模块（已从 Flask Blueprint 解耦）
 """
 import json
 from datetime import datetime
-from flask import Blueprint, jsonify
 
 from biz.api import push_review_enabled
 from biz.service.review_service import ReviewService
 from biz.utils.im import notifier
 from biz.utils.log import logger
 from biz.utils.reporter import Reporter
-
-daily_report_bp = Blueprint('daily_report', __name__)
 
 
 def _generate_daily_report() -> str | None:
@@ -61,21 +58,20 @@ def daily_report_task():
         logger.error(f"Failed to generate daily report: {e}")
 
 
-@daily_report_bp.route('/review/daily_report', methods=['GET'])
 def daily_report():
     """
-    日报路由处理函数
+    日报逻辑函数（FastAPI 路由在 api/main.py 中定义）
     """
     try:
         logger.info("开始生成日报...")
         report_txt = _generate_daily_report()
         if report_txt is None:
-            return jsonify({'message': 'No data to process.'}), 200
+            return {'message': 'No data to process.'}
         # 发送钉钉通知
         notifier.send_notification(content=report_txt, msg_type="markdown", title="代码提交日报")
         logger.info("日报发送成功")
         # 返回生成的日报内容
-        return json.dumps(report_txt, ensure_ascii=False, indent=4)
+        return json.loads(json.dumps(report_txt, ensure_ascii=False))
     except Exception as e:
         logger.error(f"Failed to generate daily report: {e}")
-        return jsonify({'message': f"Failed to generate daily report: {e}"}), 500
+        return {'message': f"Failed to generate daily report: {e}"}
