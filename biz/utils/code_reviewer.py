@@ -307,11 +307,39 @@ class CodeReviewer(BaseReviewer):
                     for batch in batch_definitions
                 }
 
-                try:
-                    for future in concurrent.futures.as_completed(future_to_batch, timeout=timeout_per_batch):
+                # 计算整体超时上限：每个"波次"都有 timeout_per_batch 的时间预算
+                # 波次数 = ceil(total_batches / max_concurrent)
+                waves = (len(batch_definitions) + max_concurrent - 1) // max_concurrent
+                overall_timeout = timeout_per_batch * max(waves, 1)
+                logger.debug(f"并发审查整体超时上限: {overall_timeout}秒 ({waves} 波次 × {timeout_per_batch}秒/波次)")
+
+                import time
+                executor_start = time.time()
+                pending = set(future_to_batch.keys())
+                # 轮询间隔取 overall_timeout 的 10% 或 30 秒，取较小值，最少 1 秒
+                poll_interval = max(1.0, min(30.0, overall_timeout / 10.0))
+
+                while pending:
+                    # 检查整体超时
+                    remaining = overall_timeout - (time.time() - executor_start)
+                    if remaining <= 0:
+                        logger.error(
+                            f"整体审查超时（>{overall_timeout}秒），"
+                            f"已完成 {len(results_by_batch)}/{len(batch_definitions)}，终止等待剩余批次"
+                        )
+                        break
+
+                    # 等待下一批完成，但不超过剩余时间或轮询间隔
+                    done, pending = concurrent.futures.wait(
+                        pending,
+                        timeout=min(remaining, poll_interval),
+                        return_when=concurrent.futures.FIRST_COMPLETED,
+                    )
+
+                    for future in done:
                         batch = future_to_batch[future]
                         try:
-                            batch_num, result, error = future.result()
+                            batch_num, result, error = future.result(timeout=0)
                             results_by_batch[batch_num] = result
                             if error:
                                 logger.warning(f"批次 {batch_num} 审查产生错误: {error}")
@@ -323,18 +351,14 @@ class CodeReviewer(BaseReviewer):
                                 f"### 批次 {batch['num']} (文件: {', '.join(batch['paths'])})\n"
                                 f"审查失败: {str(e)}"
                             )
-                except concurrent.futures.TimeoutError:
-                    logger.error(
-                        f"部分批次审查超时（>{timeout_per_batch}秒），"
-                        f"已完成 {len(results_by_batch)}/{len(batch_definitions)}"
-                    )
+
                 # 标记所有未完成的批次为超时
                 for batch in batch_definitions:
                     if batch['num'] not in results_by_batch:
-                        logger.error(f"批次 {batch['num']} 超时（>{timeout_per_batch}秒），标记为失败")
+                        logger.error(f"批次 {batch['num']} 超时（整体审查超时），标记为失败")
                         results_by_batch[batch['num']] = (
                             f"### 批次 {batch['num']} (文件: {', '.join(batch['paths'])})\n"
-                            f"审查超时: 请求超过 {timeout_per_batch} 秒未返回"
+                            f"审查超时: 整体审查时间超过 {overall_timeout} 秒"
                         )
 
             # 按批次号排序还原顺序

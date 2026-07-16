@@ -16,8 +16,14 @@ class DeepSeekClient(BaseClient):
         if not self.api_key:
             raise ValueError("API key is required. Please provide it or set it in the environment variables.")
 
-        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url) # DeepSeek supports OpenAI API SDK
+        timeout = float(os.getenv("DEEPSEEK_TIMEOUT", "120.0"))
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=timeout,
+        )  # DeepSeek supports OpenAI API SDK
         self.default_model = os.getenv("DEEPSEEK_API_MODEL", "deepseek-chat")
+        logger.info(f"DeepSeek 客户端初始化成功，超时时间: {timeout}秒")
 
     def completions(self,
                     messages: List[Dict[str, str]],

@@ -365,7 +365,9 @@ def test_concurrent_batch_failure_does_not_crash_review(mock_llm_client):
             raise RuntimeError("模拟 LLM 调用失败")
         return "```markdown\n审查结果\n总分：80分\n```"
 
-    with patch.object(reviewer, 'review_code', side_effect=flaky_review_code):
+    with patch.object(reviewer, 'review_code', side_effect=flaky_review_code), \
+         patch.object(reviewer, '_summarize_reviews',
+                      side_effect=lambda reviews, **kw: "\n\n".join(reviews)):
         with patch.dict(os.environ, {
             'BATCH_REVIEW_ENABLED': '1',
             'BATCH_REVIEW_FILES_PER_BATCH': '1',
@@ -425,7 +427,9 @@ def test_concurrent_result_ordering_preserved(mock_llm_client):
         # 模拟不同批次有不同的处理时间（通过返回来模拟）
         return f"```markdown\n批次{batch_num}审查结果\n总分：{80 + batch_num}分\n```"
 
-    with patch.object(reviewer, 'review_code', side_effect=order_test_review_code):
+    with patch.object(reviewer, 'review_code', side_effect=order_test_review_code), \
+         patch.object(reviewer, '_summarize_reviews',
+                      side_effect=lambda reviews, **kw: "\n\n".join(reviews)):
         with patch.dict(os.environ, {
             'BATCH_REVIEW_ENABLED': '1',
             'BATCH_REVIEW_FILES_PER_BATCH': '1',
@@ -445,7 +449,7 @@ def test_concurrent_result_ordering_preserved(mock_llm_client):
 
 
 def test_concurrent_timeout_handling(mock_llm_client):
-    """超时批次应标记失败，审查继续"""
+    """超时批次应标记失败，审查继续（整体超时安全网触发）"""
     import time
 
     changes = _make_fake_changes(3)
@@ -454,15 +458,17 @@ def test_concurrent_timeout_handling(mock_llm_client):
     def slow_review_code(diffs_text, commits_text="", project_name="",
                          gitlab_base_url="", project_slug="", branch_name=""):
         if 'file_1' in diffs_text:
-            time.sleep(2)  # 超过 timeout=1 秒
+            time.sleep(2)  # 超过整体超时（1秒）
         return "```markdown\n审查结果\n总分：80分\n```"
 
-    with patch.object(reviewer, 'review_code', side_effect=slow_review_code):
+    with patch.object(reviewer, 'review_code', side_effect=slow_review_code), \
+         patch.object(reviewer, '_summarize_reviews',
+                      side_effect=lambda reviews, **kw: "\n\n".join(reviews)):
         with patch.dict(os.environ, {
             'BATCH_REVIEW_ENABLED': '1',
             'BATCH_REVIEW_FILES_PER_BATCH': '1',
             'BATCH_REVIEW_MAX_CONCURRENT': '3',
-            'BATCH_REVIEW_TIMEOUT_PER_BATCH': '1',  # 1秒超时
+            'BATCH_REVIEW_TIMEOUT_PER_BATCH': '1',  # 1秒/波次 → 整体超时 = 1秒
         }):
             result = reviewer.review_changes_in_batches(
                 changes, commits_text="test commit", project_name="test-project"
