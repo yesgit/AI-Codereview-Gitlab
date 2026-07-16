@@ -97,29 +97,33 @@ async def handle_gitlab_webhook(data: dict, request: Request):
 
     gitlab_url_slug = slugify_url(gitlab_url)
 
-    # 查项目配置，获取评论目标（镜像场景）
+    # 查项目配置，获取评论目标和审查策略
     project_slug = data.get('project', {}).get('path_with_namespace', '')
     comment_url = gitlab_url
     comment_token = gitlab_token
+    review_strategy = os.getenv('REVIEW_STRATEGY', 'diff_only')
     if project_slug:
         config = WebhookService.get_webhook_mapping_by_gitlab_project(
             gitlab_url.rstrip('/'), project_slug
         )
-        if config and config.get('comment_enabled') and config.get('comment_url'):
-            comment_url = config.get('comment_url')
-            comment_token = config.get('comment_token') or gitlab_token
+        if config:
+            if config.get('comment_enabled') and config.get('comment_url'):
+                comment_url = config.get('comment_url')
+                comment_token = config.get('comment_token') or gitlab_token
+            if config.get('review_strategy') and config['review_strategy'].strip():
+                review_strategy = config['review_strategy'].strip()
 
     logger.info(f'Received event: {object_kind}')
     logger.info(f'Payload: {data}')
 
     if object_kind == "merge_request":
-        handle_queue(handle_merge_request_event, data, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token)
+        handle_queue(handle_merge_request_event, data, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token, review_strategy)
         return {"message": f'Request received(object_kind={object_kind}), will process asynchronously.'}, 200
     elif object_kind == "push":
-        handle_queue(handle_push_event, data, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token)
+        handle_queue(handle_push_event, data, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token, review_strategy)
         return {"message": f'Request received(object_kind={object_kind}), will process asynchronously.'}, 200
     elif object_kind == "note":
-        handle_queue(handle_note_event, data, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token)
+        handle_queue(handle_note_event, data, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token, review_strategy)
         return {"message": f'Request received(object_kind={object_kind}), will process asynchronously.'}, 200
     else:
         error_message = f'Only merge_request, push and note events are supported (both Webhook and System Hook), but received: {object_kind}.'

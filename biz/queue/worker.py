@@ -79,10 +79,10 @@ def _resolve_repo_for_event(webhook_data: dict, gitlab_url: str = "") -> tuple[s
     return None, None, None
 
 
-def _review_with_strategy(changes: list, commits_text: str, webhook_data: dict, gitlab_url: str) -> str:
-    """Pick review strategy based on REVIEW_STRATEGY env var."""
-    strategy = os.getenv("REVIEW_STRATEGY", "diff_only")
-    if strategy != "agentic":
+def _review_with_strategy(changes: list, commits_text: str, webhook_data: dict, gitlab_url: str,
+                         review_strategy: str = 'diff_only') -> str:
+    """Pick review strategy based on review_strategy parameter (project > env > default)."""
+    if review_strategy != "agentic":
         return CodeReviewer().review_and_strip_code(str(changes), commits_text)
 
     # Agentic mode.
@@ -160,7 +160,8 @@ def handle_retry(webhook_data: dict, exception: Exception, handler_function, *ar
 
 
 def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gitlab_url_slug: str,
-                      comment_url: str = None, comment_token: str = None):
+                      comment_url: str = None, comment_token: str = None,
+                      review_strategy: str = 'diff_only'):
     push_review_enabled = os.environ.get('PUSH_REVIEW_ENABLED', '0') == '1'
     try:
         handler = PushHandler(webhook_data, gitlab_token, gitlab_url, comment_url=comment_url, comment_token=comment_token)
@@ -317,12 +318,13 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
     except Exception as e:
         # 判断是否为可重试的异常
         if is_retryable_error(e):
-            handle_retry(webhook_data, e, handle_push_event, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token)
+            handle_retry(webhook_data, e, handle_push_event, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token, review_strategy)
         else:
             error_message = f'服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
             notifier.send_notification(content=error_message)
 def handle_note_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gitlab_url_slug: str,
-                     comment_url: str = None, comment_token: str = None):
+                     comment_url: str = None, comment_token: str = None,
+                     review_strategy: str = 'diff_only'):
     """
     处理 GitLab note 事件（@AI 触发评审）
     
@@ -371,7 +373,7 @@ def handle_note_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
     except Exception as e:
         # 判断是否为可重试的异常
         if is_retryable_error(e):
-            handle_retry(webhook_data, e, handle_note_event, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token)
+            handle_retry(webhook_data, e, handle_note_event, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token, review_strategy)
         else:
             error_message = f'AI Code Review 服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
             notifier.send_notification(content=error_message)
@@ -569,7 +571,8 @@ def _handle_mr_note_review(handler, gitlab_token, gitlab_url, gitlab_url_slug,
 
 
 def handle_merge_request_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gitlab_url_slug: str,
-                               comment_url: str = None, comment_token: str = None):
+                               comment_url: str = None, comment_token: str = None,
+                               review_strategy: str = 'diff_only'):
     '''
     处理Merge Request Hook事件
     :param webhook_data:
@@ -675,14 +678,15 @@ def handle_merge_request_event(webhook_data: dict, gitlab_token: str, gitlab_url
     except Exception as e:
         # 判断是否为可重试的异常
         if is_retryable_error(e):
-            handle_retry(webhook_data, e, handle_merge_request_event, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token)
+            handle_retry(webhook_data, e, handle_merge_request_event, gitlab_token, gitlab_url, gitlab_url_slug, comment_url, comment_token, review_strategy)
         else:
             error_message = f'AI Code Review 服务出现未知错误: {str(e)}\n{traceback.format_exc()}'
             notifier.send_notification(content=error_message)
             logger.error('出现未知错误: %s', error_message)
 
 def handle_github_push_event(webhook_data: dict, github_token: str, github_url: str, github_url_slug: str,
-                             comment_url: str = None, comment_token: str = None):
+                             comment_url: str = None, comment_token: str = None,
+                             review_strategy: str = 'diff_only'):
     push_review_enabled = os.environ.get('PUSH_REVIEW_ENABLED', '0') == '1'
     try:
         handler = GithubPushHandler(webhook_data, github_token, github_url)
@@ -752,7 +756,8 @@ def handle_github_push_event(webhook_data: dict, github_token: str, github_url: 
 
 
 def handle_github_pull_request_event(webhook_data: dict, github_token: str, github_url: str, github_url_slug: str,
-                                     comment_url: str = None, comment_token: str = None):
+                                     comment_url: str = None, comment_token: str = None,
+                                     review_strategy: str = 'diff_only'):
     '''
     处理GitHub Pull Request 事件
     :param webhook_data:
@@ -856,7 +861,8 @@ def handle_github_pull_request_event(webhook_data: dict, github_token: str, gith
 
 
 def handle_gitea_push_event(webhook_data: dict, gitea_token: str, gitea_url: str, gitea_url_slug: str,
-                            comment_url: str = None, comment_token: str = None):
+                            comment_url: str = None, comment_token: str = None,
+                            review_strategy: str = 'diff_only'):
     push_review_enabled = os.environ.get('PUSH_REVIEW_ENABLED', '0') == '1'
     try:
         handler = GiteaPushHandler(webhook_data, gitea_token, gitea_url)
@@ -927,7 +933,8 @@ def handle_gitea_push_event(webhook_data: dict, gitea_token: str, gitea_url: str
 
 
 def handle_gitea_pull_request_event(webhook_data: dict, gitea_token: str, gitea_url: str, gitea_url_slug: str,
-                                    comment_url: str = None, comment_token: str = None):
+                                    comment_url: str = None, comment_token: str = None,
+                                    review_strategy: str = 'diff_only'):
     merge_review_only_protected_branches = os.environ.get('MERGE_REVIEW_ONLY_PROTECTED_BRANCHES_ENABLED', '0') == '1'
     try:
         handler = GiteaPullRequestHandler(webhook_data, gitea_token, gitea_url)

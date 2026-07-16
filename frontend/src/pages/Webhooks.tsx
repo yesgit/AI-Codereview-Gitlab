@@ -544,9 +544,24 @@ const Webhooks: React.FC = () => {
                       />
                     </Form.Item>
 
-                    <Form.Item 
-                      label="支持的文件扩展名" 
-                      name="supported_extensions" 
+                    <Form.Item
+                      label="审查策略"
+                      name="review_strategy"
+                      tooltip="diff_only: 仅审查 diff（默认）；agentic: AI 自主探索代码库（需要 git/ripgrep 工具支持）"
+                    >
+                      <Select
+                        placeholder="选择审查策略"
+                        allowClear
+                        options={[
+                          { label: '仅 Diff（默认）', value: 'diff_only' },
+                          { label: 'Agentic 深度审查', value: 'agentic' },
+                        ]}
+                      />
+                    </Form.Item>
+
+                    <Form.Item
+                      label="支持的文件扩展名"
+                      name="supported_extensions"
                       tooltip="指定需要评审的文件扩展名，用逗号分隔。如：.java,.py,.js,.ts。留空则使用环境变量或系统默认值"
                     >
                       <Input.TextArea 

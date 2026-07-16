@@ -6,7 +6,8 @@ from biz.utils.log import logger
 
 
 def handle_queue(function: callable, data: any, token: str, url: str, url_slug: str,
-                 comment_url: str = None, comment_token: str = None):
+                 comment_url: str = None, comment_token: str = None,
+                 review_strategy: str = 'diff_only'):
     """
     处理异步任务，支持两种模式：
     1. RQ (Redis Queue) - 适合分布式部署
@@ -40,27 +41,29 @@ def handle_queue(function: callable, data: any, token: str, url: str, url_slug: 
             q = Queue(queue_name, connection=redis_conn)
 
             # 将任务加入 Redis 队列
-            job = q.enqueue(function, data, token, url, url_slug, comment_url, comment_token, job_timeout='30m')
+            job = q.enqueue(function, data, token, url, url_slug, comment_url, comment_token, review_strategy, job_timeout='30m')
             logger.info(f'Task enqueued to Redis Queue: {job.id}')
         except Exception as e:
             logger.error(f'Failed to enqueue task to Redis Queue: {e}. Falling back to multiprocessing.')
             # 失败时回退到多进程模式
-            _handle_with_multiprocessing(function, data, token, url, url_slug, comment_url, comment_token)
+            _handle_with_multiprocessing(function, data, token, url, url_slug, comment_url, comment_token, review_strategy)
     else:
         # 使用多进程模式（默认）
-        _handle_with_multiprocessing(function, data, token, url, url_slug, comment_url, comment_token)
+        _handle_with_multiprocessing(function, data, token, url, url_slug, comment_url, comment_token, review_strategy)
 
 
 def _handle_with_multiprocessing(function: callable, data: any, token: str, url: str, url_slug: str,
-                                 comment_url: str = None, comment_token: str = None):
+                                 comment_url: str = None, comment_token: str = None,
+                                 review_strategy: str = 'diff_only'):
     """使用多进程处理任务"""
-    process = Process(target=function, args=(data, token, url, url_slug, comment_url, comment_token))
+    process = Process(target=function, args=(data, token, url, url_slug, comment_url, comment_token, review_strategy))
     process.start()
     logger.info(f'Task started in new process: {process.pid}')
 
 
 def retry_task(function: callable, data: any, token: str, url: str, url_slug: str,
-               comment_url: str = None, comment_token: str = None, delay: int = 60):
+               comment_url: str = None, comment_token: str = None,
+               review_strategy: str = 'diff_only', delay: int = 60):
     """
     重试失败的任务，支持两种模式：
     1. RQ (Redis Queue) - 延迟重试
@@ -113,6 +116,7 @@ def retry_task(function: callable, data: any, token: str, url: str, url_slug: st
                 url_slug,
                 comment_url,
                 comment_token,
+                review_strategy,
                 job_timeout='30m',
                 result_ttl=86400  # 保留结果24小时
             )
@@ -127,11 +131,12 @@ def retry_task(function: callable, data: any, token: str, url: str, url_slug: st
 
 
 def _retry_with_multiprocessing(function: callable, data: any, token: str, url: str, url_slug: str,
-                                comment_url: str = None, comment_token: str = None, delay: int = 60):
+                                comment_url: str = None, comment_token: str = None,
+                                review_strategy: str = 'diff_only', delay: int = 60):
     """使用多进程延迟重试任务"""
     def delayed_retry():
         time.sleep(delay)
-        process = Process(target=function, args=(data, token, url, url_slug, comment_url, comment_token))
+        process = Process(target=function, args=(data, token, url, url_slug, comment_url, comment_token, review_strategy))
         process.start()
         logger.info(f'Retry task started in new process after {delay}s: {process.pid}')
     

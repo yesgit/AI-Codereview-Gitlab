@@ -36,6 +36,7 @@ export interface Webhook {
   comment_enabled?: boolean;
   comment_url?: string;
   comment_token?: string;
+  review_strategy?: string;
   created_at?: number;
   updated_at?: number;
 }
@@ -61,6 +62,7 @@ export interface WebhookForm {
   comment_enabled?: boolean;
   comment_url?: string;
   comment_token?: string;
+  review_strategy?: string;
 }
 
 export interface BranchWebhook {
