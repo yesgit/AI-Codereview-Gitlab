@@ -52,11 +52,4 @@ FROM app AS worker
 
 # RQ Worker: 从 Redis 队列拉取任务执行
 # 使用前需设置: QUEUE_DRIVER=rq 和 REDIS_URL
-CMD ["sh", "-c", "\
-  if [ \"$QUEUE_DRIVER\" = 'rq' ]; then \
-    echo 'Starting RQ Worker...'; \
-    rq worker --url \"${REDIS_URL:-redis://redis:6379/0}\" \"${WORKER_QUEUE:-default}\"; \
-  else \
-    echo 'QUEUE_DRIVER not set to rq, worker idle'; \
-    tail -f /dev/null; \
-  fi"]
+CMD rq worker --url ${REDIS_URL:-redis://redis:6379/0} ${WORKER_QUEUE:-default}
