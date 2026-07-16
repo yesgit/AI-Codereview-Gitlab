@@ -267,7 +267,7 @@ class WebhookService:
                                 dingtalk_url, feishu_url, wecom_url,
                                 dingtalk_enabled, feishu_enabled, wecom_enabled,
                                 custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, supported_extensions, gitlab_token,
-                                comment_enabled, comment_url, comment_token, review_strategy
+                                comment_enabled, comment_url, comment_token, comment_project_path, review_strategy
                          FROM project_webhooks
                          WHERE gitlab_base_url = :gitlab_base_url
                          AND project_slug = :project_slug
