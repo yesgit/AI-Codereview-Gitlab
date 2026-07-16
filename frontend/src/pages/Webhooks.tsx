@@ -554,6 +554,7 @@ const Webhooks: React.FC = () => {
                         allowClear
                         options={[
                           { label: '仅 Diff（默认）', value: 'diff_only' },
+                          { label: '自适应（推荐）', value: 'auto' },
                           { label: 'Agentic 深度审查', value: 'agentic' },
                         ]}
                       />

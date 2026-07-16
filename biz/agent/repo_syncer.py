@@ -165,10 +165,11 @@ class LocalRepoSyncer:
             f.close()
 
     def _clone(self, url: str, target: Path) -> None:
-        logger.debug("cloning %s -> %s", url, target)
+        # 浅克隆 (--depth 1) 减少磁盘占用和克隆时间
+        logger.debug("shallow cloning %s -> %s", url, target)
         try:
             subprocess.run(
-                ["git", "clone", url, str(target)],
+                ["git", "clone", "--depth", "1", "--single-branch", url, str(target)],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -181,10 +182,18 @@ class LocalRepoSyncer:
 
     def _fetch_and_checkout(self, target: Path, ref: str) -> None:
         try:
-            subprocess.run(
-                ["git", "fetch", "--all", "--prune"],
-                cwd=target, check=True, capture_output=True, text=True, timeout=self.clone_timeout,
-            )
+            # 只 fetch 需要的 ref，使用 --depth 1 保持浅克隆
+            is_sha = bool(re.fullmatch(r"[0-9a-fA-F]{7,40}", ref))
+            if is_sha:
+                subprocess.run(
+                    ["git", "fetch", "--depth", "1", "origin", ref],
+                    cwd=target, check=True, capture_output=True, text=True, timeout=self.clone_timeout,
+                )
+            else:
+                subprocess.run(
+                    ["git", "fetch", "--depth", "1", "origin", f"{ref}:refs/remotes/origin/{ref}"],
+                    cwd=target, check=True, capture_output=True, text=True, timeout=self.clone_timeout,
+                )
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"git fetch failed: {e.stderr.strip()}") from e
         # Determine if ref looks like a SHA (hex, length >= 7) or a branch name.

@@ -79,10 +79,33 @@ def _resolve_repo_for_event(webhook_data: dict, gitlab_url: str = "") -> tuple[s
     return None, None, None
 
 
+def _estimate_complexity(changes: list) -> int:
+    """估算 diff 复杂度：统计总新增行数"""
+    total = 0
+    for c in (changes or []):
+        diff_text = c.get('diff', '') if isinstance(c, dict) else str(c)
+        total += len([l for l in diff_text.split('\n') if l.startswith('+') and not l.startswith('+++')])
+    return total
+
+
 def _review_with_strategy(changes: list, commits_text: str, webhook_data: dict, gitlab_url: str,
                          review_strategy: str = 'diff_only') -> str:
-    """Pick review strategy based on review_strategy parameter (project > env > default)."""
-    if review_strategy != "agentic":
+    """Pick review strategy based on review_strategy parameter (project > env > default).
+
+    review_strategy 可选值:
+      - 'diff_only': 仅审查 diff
+      - 'agentic':   始终使用 agent 深度审查
+      - 'auto':      自适应：简单变更用 diff_only，复杂变更（>200 行新增）用 agentic
+    """
+    strategy = review_strategy or 'diff_only'
+
+    if strategy == 'auto':
+        complexity = _estimate_complexity(changes)
+        threshold = int(os.getenv('AGENTIC_AUTO_THRESHOLD', '200'))
+        strategy = 'agentic' if complexity > threshold else 'diff_only'
+        logger.info(f"auto strategy: complexity={complexity} threshold={threshold} → {strategy}")
+
+    if strategy != "agentic":
         return CodeReviewer().review_and_strip_code(str(changes), commits_text)
 
     # Agentic mode.
