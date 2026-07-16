@@ -31,11 +31,11 @@ def upgrade():
         print("✅ 已为 project_webhooks 表添加 comment_enabled 字段")
 
     if 'comment_url' not in project_columns:
-        op.add_column('project_webhooks', sa.Column('comment_url', sa.Text(), nullable=True, server_default=''))
+        op.add_column('project_webhooks', sa.Column('comment_url', sa.Text(), nullable=True))
         print("✅ 已为 project_webhooks 表添加 comment_url 字段")
 
     if 'comment_token' not in project_columns:
-        op.add_column('project_webhooks', sa.Column('comment_token', sa.Text(), nullable=True, server_default=''))
+        op.add_column('project_webhooks', sa.Column('comment_token', sa.Text(), nullable=True))
         print("✅ 已为 project_webhooks 表添加 comment_token 字段")
 
 
