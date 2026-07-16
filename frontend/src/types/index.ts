@@ -37,6 +37,7 @@ export interface Webhook {
   comment_url?: string;
   comment_token?: string;
   comment_project_path?: string;
+  comment_project_id?: number;
   review_strategy?: string;
   created_at?: number;
   updated_at?: number;
@@ -64,6 +65,7 @@ export interface WebhookForm {
   comment_url?: string;
   comment_token?: string;
   comment_project_path?: string;
+  comment_project_id?: number;
   review_strategy?: string;
 }
 

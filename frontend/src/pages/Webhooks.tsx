@@ -510,6 +510,14 @@ const Webhooks: React.FC = () => {
                             >
                               <Input placeholder="group/project（留空则使用源库路径）" />
                             </Form.Item>
+
+                            <Form.Item
+                              label="评论目标项目 ID"
+                              name="comment_project_id"
+                              tooltip="目标实例上的数字项目 ID。如果目标 GitLab 不支持 URL 编码路径（404），使用此字段填写数字 ID。优先级高于项目路径。"
+                            >
+                              <Input placeholder="目标实例上的数字项目 ID" type="number" />
+                            </Form.Item>
                           </>
                         ) : null
                       }
