@@ -69,6 +69,7 @@ class WebhookUpdate(BaseModel):
     comment_url: Optional[str] = None
     comment_token: Optional[str] = None
     comment_project_path: Optional[str] = None
+    comment_project_id: Optional[int] = None
     review_strategy: Optional[str] = None
 
 
