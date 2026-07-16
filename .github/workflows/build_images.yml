@@ -17,9 +17,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU for multi-arch builds
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
@@ -55,25 +52,25 @@ jobs:
             type=semver,pattern={{major}}-worker
 
       # Build and push multi-arch app image
-      - name: Build and push app Docker image (Multi-Arch)
+      - name: Build and push app Docker image (amd64)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64/v8
+          platforms: linux/amd64
           tags: ${{ steps.meta_app.outputs.tags }}
           labels: ${{ steps.meta_app.outputs.labels }}
           target: app
 
       # Build and push multi-arch worker image
-      - name: Build and push worker Docker image (Multi-Arch)
+      - name: Build and push worker Docker image (amd64)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64/v8
+          platforms: linux/amd64
           tags: ${{ steps.meta_worker.outputs.tags }}
           labels: ${{ steps.meta_worker.outputs.labels }}
           target: worker
