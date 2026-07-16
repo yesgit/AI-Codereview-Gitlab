@@ -226,6 +226,7 @@ async def update_webhook(webhook_id: int, webhook: WebhookUpdate, current_user: 
         comment_enabled=webhook.comment_enabled,
         comment_url=webhook.comment_url,
         comment_token=webhook.comment_token,
+        comment_project_path=webhook.comment_project_path,
         review_strategy=webhook.review_strategy
     )
 
