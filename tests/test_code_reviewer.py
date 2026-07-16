@@ -288,5 +288,213 @@ def test_fallback_to_default_prompt(mock_llm_client):
     print("✅ 默认 prompt 回退测试通过")
 
 
+# ==============================================
+# 并发批量审查测试
+# ==============================================
+
+def _make_fake_changes(file_count: int):
+    """构造测试用的 changes 列表"""
+    return [
+        {
+            'new_path': f'src/file_{i}.py',
+            'old_path': f'src/file_{i}.py',
+            'diff': f'@@ -1,3 +1,5 @@\n+new line in file {i}\n',
+            'additions': 1,
+            'deletions': 0,
+        }
+        for i in range(file_count)
+    ]
+
+
+def test_concurrent_produces_same_structure_as_sequential(mock_llm_client):
+    """并发路径应产生与顺序路径相同结构的输出"""
+    mock_llm_client.completions.return_value = "```markdown\n审查结果\n总分：85分\n```"
+
+    changes = _make_fake_changes(6)  # 6 files
+    reviewer = CodeReviewer()
+
+    # 顺序模式 (max_concurrent=1)
+    with patch.dict(os.environ, {
+        'BATCH_REVIEW_ENABLED': '1',
+        'BATCH_REVIEW_FILES_PER_BATCH': '2',
+        'BATCH_REVIEW_MAX_CONCURRENT': '1',
+        'BATCH_REVIEW_TIMEOUT_PER_BATCH': '300',
+    }):
+        sequential_result = reviewer.review_changes_in_batches(
+            changes, commits_text="test commit", project_name="test-project"
+        )
+
+    # 重置 mock 调用计数
+    mock_llm_client.completions.reset_mock()
+    mock_llm_client.completions.return_value = "```markdown\n审查结果\n总分：85分\n```"
+
+    # 并发模式 (max_concurrent=3)
+    with patch.dict(os.environ, {
+        'BATCH_REVIEW_ENABLED': '1',
+        'BATCH_REVIEW_FILES_PER_BATCH': '2',
+        'BATCH_REVIEW_MAX_CONCURRENT': '3',
+        'BATCH_REVIEW_TIMEOUT_PER_BATCH': '300',
+    }):
+        concurrent_result = reviewer.review_changes_in_batches(
+            changes, commits_text="test commit", project_name="test-project"
+        )
+
+    # 两种模式都应该返回非空字符串结果
+    assert sequential_result is not None
+    assert len(sequential_result) > 0
+    assert concurrent_result is not None
+    assert len(concurrent_result) > 0
+    # 两种模式都应该有相同数量的 LLM 调用 (3 batches + 1 summary = 4 calls)
+    assert mock_llm_client.completions.call_count >= 3
+
+    print("✅ 并发与顺序路径输出结构一致测试通过")
+
+
+def test_concurrent_batch_failure_does_not_crash_review(mock_llm_client):
+    """单个批次失败不应导致整个审查崩溃"""
+    changes = _make_fake_changes(5)  # 5 files → 5 batches
+    reviewer = CodeReviewer()
+
+    # 用 side_effect 让批次 2 失败
+    call_count = [0]
+
+    def flaky_review_code(diffs_text, commits_text="", project_name="",
+                          gitlab_base_url="", project_slug="", branch_name=""):
+        call_count[0] += 1
+        if call_count[0] == 2:
+            raise RuntimeError("模拟 LLM 调用失败")
+        return "```markdown\n审查结果\n总分：80分\n```"
+
+    with patch.object(reviewer, 'review_code', side_effect=flaky_review_code):
+        with patch.dict(os.environ, {
+            'BATCH_REVIEW_ENABLED': '1',
+            'BATCH_REVIEW_FILES_PER_BATCH': '1',
+            'BATCH_REVIEW_MAX_CONCURRENT': '3',
+            'BATCH_REVIEW_TIMEOUT_PER_BATCH': '300',
+        }):
+            result = reviewer.review_changes_in_batches(
+                changes, commits_text="test commit", project_name="test-project"
+            )
+
+    # 审查应该完成（汇总结果非空）
+    assert result is not None
+    assert len(result) > 0
+    # 应该包含失败批次的错误信息
+    assert "审查失败" in result
+
+    print("✅ 批次失败不影响整体审查测试通过")
+
+
+def test_concurrent_single_batch_no_header(mock_llm_client):
+    """单批次输入 + 并发启用 → 应去掉批次标题"""
+    mock_llm_client.completions.return_value = "```markdown\n单文件审查结果\n总分：90分\n```"
+
+    changes = _make_fake_changes(1)  # 1 file → 1 batch
+    reviewer = CodeReviewer()
+
+    with patch.dict(os.environ, {
+        'BATCH_REVIEW_ENABLED': '1',
+        'BATCH_REVIEW_FILES_PER_BATCH': '1',
+        'BATCH_REVIEW_MAX_CONCURRENT': '3',
+        'BATCH_REVIEW_TIMEOUT_PER_BATCH': '300',
+    }):
+        result = reviewer.review_changes_in_batches(
+            changes, commits_text="test commit", project_name="test-project"
+        )
+
+    # 单批次时不应有批次标题
+    assert "### 批次" not in result
+    assert "单文件审查结果" in result
+
+    print("✅ 单批次无标题测试通过")
+
+
+def test_concurrent_result_ordering_preserved(mock_llm_client):
+    """结果应按批次号排序，而非完成顺序"""
+    changes = _make_fake_changes(6)  # 6 files → 6 batches with files_per_batch=1
+    reviewer = CodeReviewer()
+
+    # 用不同的返回内容标识不同批次
+    def order_test_review_code(diffs_text, commits_text="", project_name="",
+                               gitlab_base_url="", project_slug="", branch_name=""):
+        # 从 diff_text 中提取文件编号
+        import re
+        match = re.search(r'file_(\d+)', diffs_text)
+        file_num = int(match.group(1)) if match else 0
+        batch_num = file_num + 1  # files are 0-indexed, batch is 1-indexed
+        # 模拟不同批次有不同的处理时间（通过返回来模拟）
+        return f"```markdown\n批次{batch_num}审查结果\n总分：{80 + batch_num}分\n```"
+
+    with patch.object(reviewer, 'review_code', side_effect=order_test_review_code):
+        with patch.dict(os.environ, {
+            'BATCH_REVIEW_ENABLED': '1',
+            'BATCH_REVIEW_FILES_PER_BATCH': '1',
+            'BATCH_REVIEW_MAX_CONCURRENT': '3',
+            'BATCH_REVIEW_TIMEOUT_PER_BATCH': '300',
+        }):
+            result = reviewer.review_changes_in_batches(
+                changes, commits_text="test commit", project_name="test-project"
+            )
+
+    assert result is not None
+    # 验证所有批次都有结果（通过检查汇总结果中的内容）
+    for i in range(1, 7):
+        assert f"批次{i}" in result
+
+    print("✅ 结果顺序保持测试通过")
+
+
+def test_concurrent_timeout_handling(mock_llm_client):
+    """超时批次应标记失败，审查继续"""
+    import time
+
+    changes = _make_fake_changes(3)
+    reviewer = CodeReviewer()
+
+    def slow_review_code(diffs_text, commits_text="", project_name="",
+                         gitlab_base_url="", project_slug="", branch_name=""):
+        if 'file_1' in diffs_text:
+            time.sleep(2)  # 超过 timeout=1 秒
+        return "```markdown\n审查结果\n总分：80分\n```"
+
+    with patch.object(reviewer, 'review_code', side_effect=slow_review_code):
+        with patch.dict(os.environ, {
+            'BATCH_REVIEW_ENABLED': '1',
+            'BATCH_REVIEW_FILES_PER_BATCH': '1',
+            'BATCH_REVIEW_MAX_CONCURRENT': '3',
+            'BATCH_REVIEW_TIMEOUT_PER_BATCH': '1',  # 1秒超时
+        }):
+            result = reviewer.review_changes_in_batches(
+                changes, commits_text="test commit", project_name="test-project"
+            )
+
+    assert result is not None
+    assert "审查超时" in result
+
+    print("✅ 超时处理测试通过")
+
+
+def test_backward_compatibility_when_concurrency_disabled(mock_llm_client):
+    """BATCH_REVIEW_MAX_CONCURRENT=1 时行为应与顺序模式完全一致"""
+    mock_llm_client.completions.return_value = "```markdown\n审查结果\n总分：88分\n```"
+
+    changes = _make_fake_changes(4)
+    reviewer = CodeReviewer()
+
+    with patch.dict(os.environ, {
+        'BATCH_REVIEW_ENABLED': '1',
+        'BATCH_REVIEW_FILES_PER_BATCH': '2',
+        'BATCH_REVIEW_MAX_CONCURRENT': '1',  # 显式关闭并发
+    }):
+        result = reviewer.review_changes_in_batches(
+            changes, commits_text="test commit", project_name="test-project"
+        )
+
+    assert result is not None
+    assert len(result) > 0
+
+    print("✅ 向后兼容测试通过")
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

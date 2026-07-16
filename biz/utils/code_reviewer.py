@@ -1,4 +1,5 @@
 import abc
+import concurrent.futures
 import os
 import random
 import re
@@ -222,46 +223,125 @@ class CodeReviewer(BaseReviewer):
         files_per_batch = int(os.getenv("BATCH_REVIEW_FILES_PER_BATCH", 1))
         logger.info(f"批量审查已启用，每批次审查 {files_per_batch} 个文件")
 
-        partial_reviews = []
         total_files = len(changes)
+        total_batches = (total_files + files_per_batch - 1) // files_per_batch
 
-        # 按配置的批次大小分批进行审查
+        # 预计算所有批次定义（token 计数/截断在主线程完成，避免 tiktoken 缓存竞态）
+        batch_definitions = []
         for batch_start in range(0, total_files, files_per_batch):
             batch_end = min(batch_start + files_per_batch, total_files)
             batch_changes = changes[batch_start:batch_end]
             batch_num = (batch_start // files_per_batch) + 1
-            total_batches = (total_files + files_per_batch - 1) // files_per_batch
 
-            logger.info(f"正在审查第 {batch_num}/{total_batches} 批次 (文件 {batch_start + 1}-{batch_end}/{total_files})")
-
-            # 收集当前批次的文件路径
             batch_file_paths = [
                 change.get('new_path') or change.get('old_path', 'unknown')
                 for change in batch_changes
             ]
 
-            # 将批次内的文件转换为文本
             batch_text = str(batch_changes)
-
-            # 计算tokens数量，如果超过限制则截断
             tokens_count = count_tokens(batch_text)
             if tokens_count > review_max_tokens:
                 logger.warning(f"批次 {batch_num} 的变更超过 {review_max_tokens} tokens，将截断")
                 batch_text = truncate_text_by_tokens(batch_text, review_max_tokens)
 
-            # 审查当前批次，传递项目/分支参数
-            try:
-                review_result = self.review_code(batch_text, commits_text, project_name, gitlab_base_url, project_slug, branch_name).strip()
-                if review_result.startswith("```markdown") and review_result.endswith("```"):
-                    review_result = review_result[11:-3].strip()
+            batch_definitions.append({
+                'num': batch_num,
+                'paths': batch_file_paths,
+                'text': batch_text,
+            })
 
-                # 添加批次标识
-                batch_header = f"### 批次 {batch_num} (文件: {', '.join(batch_file_paths)})\n"
-                partial_reviews.append(f"{batch_header}{review_result}")
-                logger.info(f"批次 {batch_num} 审查完成")
-            except Exception as e:
-                logger.error(f"审查批次 {batch_num} 时出错: {e}")
-                partial_reviews.append(f"### 批次 {batch_num}\n审查失败: {str(e)}")
+        try:
+            max_concurrent = int(os.getenv("BATCH_REVIEW_MAX_CONCURRENT", "3"))
+        except (ValueError, TypeError):
+            logger.warning(f"BATCH_REVIEW_MAX_CONCURRENT 值无效，使用默认值 3")
+            max_concurrent = 3
+        try:
+            timeout_per_batch = int(os.getenv("BATCH_REVIEW_TIMEOUT_PER_BATCH", "120"))
+        except (ValueError, TypeError):
+            logger.warning(f"BATCH_REVIEW_TIMEOUT_PER_BATCH 值无效，使用默认值 120")
+            timeout_per_batch = 120
+        partial_reviews = []
+
+        if max_concurrent <= 1:
+            # --- 顺序路径（向后兼容）---
+            for batch in batch_definitions:
+                logger.info(f"正在审查第 {batch['num']}/{total_batches} 批次 (文件: {', '.join(batch['paths'])})")
+
+                try:
+                    review_result = self.review_code(
+                        batch['text'], commits_text, project_name,
+                        gitlab_base_url, project_slug, branch_name
+                    ).strip()
+                    if review_result.startswith("```markdown") and review_result.endswith("```"):
+                        review_result = review_result[11:-3].strip()
+
+                    batch_header = f"### 批次 {batch['num']} (文件: {', '.join(batch['paths'])})\n"
+                    partial_reviews.append(f"{batch_header}{review_result}")
+                    logger.info(f"批次 {batch['num']} 审查完成")
+                except Exception as e:
+                    logger.error(f"审查批次 {batch['num']} 时出错: {e}")
+                    partial_reviews.append(f"### 批次 {batch['num']}\n审查失败: {str(e)}")
+        else:
+            # --- 并发路径 ---
+            logger.info(f"启用并发审查，最大并发数: {max_concurrent}，总批次数: {len(batch_definitions)}")
+            results_by_batch = {}
+
+            def review_single_batch(batch):
+                """审查单个批次。在 worker 线程中运行。"""
+                try:
+                    review_result = self.review_code(
+                        batch['text'], commits_text, project_name,
+                        gitlab_base_url, project_slug, branch_name
+                    ).strip()
+                    if review_result.startswith("```markdown") and review_result.endswith("```"):
+                        review_result = review_result[11:-3].strip()
+                    batch_header = f"### 批次 {batch['num']} (文件: {', '.join(batch['paths'])})\n"
+                    return (batch['num'], f"{batch_header}{review_result}", None)
+                except Exception as e:
+                    logger.error(f"审查批次 {batch['num']} 时出错: {e}")
+                    return (batch['num'], f"### 批次 {batch['num']}\n审查失败: {str(e)}", str(e))
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+                future_to_batch = {
+                    executor.submit(review_single_batch, batch): batch
+                    for batch in batch_definitions
+                }
+
+                try:
+                    for future in concurrent.futures.as_completed(future_to_batch, timeout=timeout_per_batch):
+                        batch = future_to_batch[future]
+                        try:
+                            batch_num, result, error = future.result()
+                            results_by_batch[batch_num] = result
+                            if error:
+                                logger.warning(f"批次 {batch_num} 审查产生错误: {error}")
+                            else:
+                                logger.info(f"批次 {batch_num} 审查完成")
+                        except Exception as e:
+                            logger.error(f"批次 {batch['num']} 执行异常: {e}", exc_info=True)
+                            results_by_batch[batch['num']] = (
+                                f"### 批次 {batch['num']} (文件: {', '.join(batch['paths'])})\n"
+                                f"审查失败: {str(e)}"
+                            )
+                except concurrent.futures.TimeoutError:
+                    logger.error(
+                        f"部分批次审查超时（>{timeout_per_batch}秒），"
+                        f"已完成 {len(results_by_batch)}/{len(batch_definitions)}"
+                    )
+                # 标记所有未完成的批次为超时
+                for batch in batch_definitions:
+                    if batch['num'] not in results_by_batch:
+                        logger.error(f"批次 {batch['num']} 超时（>{timeout_per_batch}秒），标记为失败")
+                        results_by_batch[batch['num']] = (
+                            f"### 批次 {batch['num']} (文件: {', '.join(batch['paths'])})\n"
+                            f"审查超时: 请求超过 {timeout_per_batch} 秒未返回"
+                        )
+
+            # 按批次号排序还原顺序
+            partial_reviews = [
+                results_by_batch[num]
+                for num in sorted(results_by_batch.keys())
+            ]
 
         # 如果只有一个批次，直接返回结果（去掉批次标识）
         if len(partial_reviews) == 1:
