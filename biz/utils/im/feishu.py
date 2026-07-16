@@ -102,7 +102,7 @@ class FeishuNotifier:
                      project_name=None, url_slug=None):
         """
         发送飞书消息
-        
+
         Args:
             content: 消息内容
             msg_type: 消息类型，支持text和markdown
@@ -114,6 +114,10 @@ class FeishuNotifier:
             project_name: 项目名称（兼容旧方式）
             url_slug: URL slug（兼容旧方式）
         """
+        if not self.enabled:
+            logger.info("飞书推送未启用")
+            return
+
         try:
             post_url = self._get_webhook_url(
                 gitlab_base_url=gitlab_base_url,

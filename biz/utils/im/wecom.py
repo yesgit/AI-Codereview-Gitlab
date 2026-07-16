@@ -107,6 +107,10 @@ class WeComNotifier:
     def send_message(self, content, msg_type='text', title=None, is_at_all=False,
                      gitlab_base_url=None, project_slug=None, branch_name=None,
                      project_name=None, url_slug=None):
+        if not self.enabled:
+            logger.info("企业微信推送未启用")
+            return
+
         try:
             post_url = self._get_webhook_url(
                 gitlab_base_url=gitlab_base_url,
