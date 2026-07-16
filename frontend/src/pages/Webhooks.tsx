@@ -502,6 +502,14 @@ const Webhooks: React.FC = () => {
                             >
                               <Input.Password placeholder="目标实例的 Personal Access Token" />
                             </Form.Item>
+
+                            <Form.Item
+                              label="评论目标项目路径"
+                              name="comment_project_path"
+                              tooltip="目标实例上的项目路径（如 group/project）。不填则使用源库的项目路径。适用于镜像场景中源和目标项目路径不同的情况。"
+                            >
+                              <Input placeholder="group/project（留空则使用源库路径）" />
+                            </Form.Item>
                           </>
                         ) : null
                       }

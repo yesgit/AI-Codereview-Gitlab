@@ -42,6 +42,7 @@ class WebhookService:
                 Column('comment_enabled', Boolean, default=False),
                 Column('comment_url', Text),
                 Column('comment_token', Text),
+                Column('comment_project_path', String(255)),
                 Column('review_strategy', String(20), nullable=False, server_default=text("'diff_only'")),
                 Column('created_at', Integer),
                 Column('updated_at', Integer),
@@ -63,6 +64,7 @@ class WebhookService:
                                          comment_enabled: Optional[bool] = None,
                                          comment_url: Optional[str] = None,
                                          comment_token: Optional[str] = None,
+                                         comment_project_path: Optional[str] = None,
                                          review_strategy: Optional[str] = None):
         try:
             now = int(time.time())
@@ -71,10 +73,10 @@ class WebhookService:
             sel_by_project = text('SELECT id, project_name, url_slug FROM project_webhooks WHERE project_name = :project_name LIMIT 1')
             sel_by_slug = text('SELECT id, project_name, url_slug FROM project_webhooks WHERE url_slug = :url_slug LIMIT 1')
             sel_by_gitlab = text('SELECT id, project_name, url_slug FROM project_webhooks WHERE gitlab_base_url = :gitlab_base_url AND project_slug = :project_slug LIMIT 1')
-            ins = text('''INSERT INTO project_webhooks (project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, custom_prompt_system, custom_prompt_user, gitlab_token, dingtalk_enabled, feishu_enabled, wecom_enabled, review_style, daily_report_enabled, supported_extensions, comment_enabled, comment_url, comment_token, review_strategy, created_at, updated_at)
-                         VALUES (:project_name, :url_slug, :gitlab_base_url, :project_slug, :dingtalk_url, :feishu_url, :wecom_url, :custom_prompt_system, :custom_prompt_user, :gitlab_token, :dingtalk_enabled, :feishu_enabled, :wecom_enabled, :review_style, :daily_report_enabled, :supported_extensions, :comment_enabled, :comment_url, :comment_token, :review_strategy, :created_at, :updated_at)''')
-            upd = text('''UPDATE project_webhooks SET project_name = :project_name, url_slug = :url_slug, gitlab_base_url = :gitlab_base_url, project_slug = :project_slug, dingtalk_url = :dingtalk_url, feishu_url = :feishu_url, wecom_url = :wecom_url, custom_prompt_system = :custom_prompt_system, custom_prompt_user = :custom_prompt_user, gitlab_token = :gitlab_token, dingtalk_enabled = :dingtalk_enabled, feishu_enabled = :feishu_enabled, wecom_enabled = :wecom_enabled, review_style = :review_style, daily_report_enabled = :daily_report_enabled, supported_extensions = :supported_extensions, comment_enabled = :comment_enabled, comment_url = :comment_url, comment_token = :comment_token, review_strategy = :review_strategy, updated_at = :updated_at WHERE id = :id''')
-            sel_by_id = text('SELECT id, project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, supported_extensions, gitlab_token, comment_enabled, comment_url, comment_token, review_strategy, created_at, updated_at FROM project_webhooks WHERE id = :id LIMIT 1')
+            ins = text('''INSERT INTO project_webhooks (project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, custom_prompt_system, custom_prompt_user, gitlab_token, dingtalk_enabled, feishu_enabled, wecom_enabled, review_style, daily_report_enabled, supported_extensions, comment_enabled, comment_url, comment_token, comment_project_path, review_strategy, created_at, updated_at)
+                         VALUES (:project_name, :url_slug, :gitlab_base_url, :project_slug, :dingtalk_url, :feishu_url, :wecom_url, :custom_prompt_system, :custom_prompt_user, :gitlab_token, :dingtalk_enabled, :feishu_enabled, :wecom_enabled, :review_style, :daily_report_enabled, :supported_extensions, :comment_enabled, :comment_url, :comment_token, :comment_project_path, :review_strategy, :created_at, :updated_at)''')
+            upd = text('''UPDATE project_webhooks SET project_name = :project_name, url_slug = :url_slug, gitlab_base_url = :gitlab_base_url, project_slug = :project_slug, dingtalk_url = :dingtalk_url, feishu_url = :feishu_url, wecom_url = :wecom_url, custom_prompt_system = :custom_prompt_system, custom_prompt_user = :custom_prompt_user, gitlab_token = :gitlab_token, dingtalk_enabled = :dingtalk_enabled, feishu_enabled = :feishu_enabled, wecom_enabled = :wecom_enabled, review_style = :review_style, daily_report_enabled = :daily_report_enabled, supported_extensions = :supported_extensions, comment_enabled = :comment_enabled, comment_url = :comment_url, comment_token = :comment_token, comment_project_path = :comment_project_path, review_strategy = :review_strategy, updated_at = :updated_at WHERE id = :id''')
+            sel_by_id = text('SELECT id, project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, supported_extensions, gitlab_token, comment_enabled, comment_url, comment_token, comment_project_path, review_strategy, created_at, updated_at FROM project_webhooks WHERE id = :id LIMIT 1')
             
             with engine.begin() as conn:
                 existing_project = None
@@ -125,7 +127,7 @@ class WebhookService:
                         'gitlab_token': gitlab_token, 'dingtalk_enabled': dingtalk_enabled, 'feishu_enabled': feishu_enabled,
                         'wecom_enabled': wecom_enabled, 'review_style': review_style, 'daily_report_enabled': daily_report_enabled,
                         'supported_extensions': supported_extensions,
-                        'comment_enabled': comment_enabled, 'comment_url': comment_url, 'comment_token': comment_token,
+                        'comment_enabled': comment_enabled, 'comment_url': comment_url, 'comment_token': comment_token, 'comment_project_path': comment_project_path,
                         'review_strategy': review_strategy or 'diff_only',
                         'updated_at': now, 'id': mapping_id
                     })
@@ -139,7 +141,7 @@ class WebhookService:
                         'gitlab_token': gitlab_token, 'dingtalk_enabled': dingtalk_enabled, 'feishu_enabled': feishu_enabled,
                         'wecom_enabled': wecom_enabled, 'review_style': review_style, 'daily_report_enabled': daily_report_enabled,
                         'supported_extensions': supported_extensions,
-                        'comment_enabled': comment_enabled, 'comment_url': comment_url, 'comment_token': comment_token,
+                        'comment_enabled': comment_enabled, 'comment_url': comment_url, 'comment_token': comment_token, 'comment_project_path': comment_project_path,
                         'review_strategy': review_strategy or 'diff_only',
                         'created_at': now, 'updated_at': now
                     })
@@ -170,7 +172,7 @@ class WebhookService:
     def get_webhook_mapping(project_name: Optional[str] = None, url_slug: Optional[str] = None):
         try:
             engine = get_engine()
-            sql = text('''SELECT id, project_name, url_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, supported_extensions, comment_enabled, comment_url, comment_token, review_strategy FROM project_webhooks
+            sql = text('''SELECT id, project_name, url_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, supported_extensions, comment_enabled, comment_url, comment_token, comment_project_path, review_strategy FROM project_webhooks
                           WHERE project_name = :project_name OR url_slug = :url_slug LIMIT 1''')
             with engine.connect() as conn:
                 res = conn.execute(sql, {'project_name': project_name, 'url_slug': url_slug})
@@ -187,7 +189,7 @@ class WebhookService:
     def get_all_webhook_mappings():
         try:
             engine = get_engine()
-            sql = text('SELECT id, project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, supported_extensions, gitlab_token, comment_enabled, comment_url, comment_token, review_strategy, created_at, updated_at FROM project_webhooks')
+            sql = text('SELECT id, project_name, url_slug, gitlab_base_url, project_slug, dingtalk_url, feishu_url, wecom_url, dingtalk_enabled, feishu_enabled, wecom_enabled, custom_prompt_system, custom_prompt_user, review_style, daily_report_enabled, supported_extensions, gitlab_token, comment_enabled, comment_url, comment_token, comment_project_path, review_strategy, created_at, updated_at FROM project_webhooks')
             with engine.connect() as conn:
                 res = conn.execute(sql)
                 rows = [dict(r) for r in res.mappings().all()]
@@ -209,6 +211,7 @@ class WebhookService:
                                      comment_enabled: Optional[bool] = None,
                                      comment_url: Optional[str] = None,
                                      comment_token: Optional[str] = None,
+                                     comment_project_path: Optional[str] = None,
                                      review_strategy: Optional[str] = None):
         try:
             now = int(time.time())
@@ -220,7 +223,7 @@ class WebhookService:
                          dingtalk_enabled = :dingtalk_enabled, feishu_enabled = :feishu_enabled, wecom_enabled = :wecom_enabled,
                          custom_prompt_system = :custom_prompt_system, custom_prompt_user = :custom_prompt_user,
                          gitlab_token = :gitlab_token, review_style = :review_style, daily_report_enabled = :daily_report_enabled, supported_extensions = :supported_extensions,
-                         comment_enabled = :comment_enabled, comment_url = :comment_url, comment_token = :comment_token,
+                         comment_enabled = :comment_enabled, comment_url = :comment_url, comment_token = :comment_token, comment_project_path = :comment_project_path,
                          review_strategy = :review_strategy,
                          updated_at = :updated_at WHERE id = :id''')
             with engine.begin() as conn:
@@ -236,7 +239,7 @@ class WebhookService:
                     'custom_prompt_system': custom_prompt_system, 'custom_prompt_user': custom_prompt_user,
                     'gitlab_token': gitlab_token, 'review_style': review_style, 'daily_report_enabled': daily_report_enabled,
                     'supported_extensions': supported_extensions,
-                    'comment_enabled': comment_enabled, 'comment_url': comment_url, 'comment_token': comment_token,
+                    'comment_enabled': comment_enabled, 'comment_url': comment_url, 'comment_token': comment_token, 'comment_project_path': comment_project_path,
                     'review_strategy': review_strategy or 'diff_only',
                     'updated_at': now, 'id': mapping_id
                 })
