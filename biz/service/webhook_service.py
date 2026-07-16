@@ -67,6 +67,9 @@ class WebhookService:
                                          comment_project_path: Optional[str] = None,
                                          review_strategy: Optional[str] = None):
         try:
+            # 规范化 gitlab_base_url：去除尾随斜杠
+            if gitlab_base_url:
+                gitlab_base_url = gitlab_base_url.rstrip('/')
             now = int(time.time())
             engine = get_engine()
             # Check duplicates: ensure project_name and url_slug are unique
@@ -214,6 +217,9 @@ class WebhookService:
                                      comment_project_path: Optional[str] = None,
                                      review_strategy: Optional[str] = None):
         try:
+            # 规范化 gitlab_base_url：去除尾随斜杠
+            if gitlab_base_url:
+                gitlab_base_url = gitlab_base_url.rstrip('/')
             now = int(time.time())
             engine = get_engine()
             sel = text('SELECT id FROM project_webhooks WHERE id = :id LIMIT 1')

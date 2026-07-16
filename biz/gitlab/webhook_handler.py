@@ -165,6 +165,7 @@ class MergeRequestHandler:
         # 使用 URL-encoded project_path 而非数字 project_id，确保跨实例兼容
         project_ref = quote(self.comment_project_path, safe='') if self.comment_project_path else str(self.project_id)
         url = urljoin(base, f"api/v4/projects/{project_ref}/merge_requests/{self.merge_request_iid}/notes")
+        logger.info(f"Posting MR notes: comment_url={self.comment_url}, comment_project_path={self.comment_project_path}, project_ref={project_ref}, mr_iid={self.merge_request_iid}, full_url={url}")
         headers = {
             'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
@@ -173,7 +174,7 @@ class MergeRequestHandler:
             'body': review_result
         }
         response = requests.post(url, headers=headers, json=data, verify=False)
-        logger.debug(f"Add notes to gitlab {url}: {response.status_code}, {response.text}")
+        logger.info(f"Add notes to gitlab: status={response.status_code}, url={url}")
         if response.status_code == 201:
             logger.info("Note successfully added to merge request.")
         else:
@@ -328,6 +329,7 @@ class NoteHandler:
             return
 
         url = urljoin(base, f"api/v4/projects/{project_ref}/repository/commits/{self.commit_id}/comments")
+        logger.info(f"Posting commit comment: comment_url={self.comment_url}, comment_project_path={self.comment_project_path}, project_ref={project_ref}, commit_id={self.commit_id}, full_url={url}")
         headers = {
             'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
@@ -337,7 +339,7 @@ class NoteHandler:
         }
 
         response = requests.post(url, headers=headers, json=data, verify=False)
-        logger.debug(f"Add comment to commit {self.commit_id}: {response.status_code}")
+        logger.info(f"Add comment to commit {self.commit_id}: status={response.status_code}, url={url}")
         if response.status_code == 201:
             logger.info("Comment successfully added to commit.")
         else:
@@ -357,6 +359,7 @@ class NoteHandler:
             return
 
         url = urljoin(base, f"api/v4/projects/{project_ref}/merge_requests/{self.mr_iid}/notes")
+        logger.info(f"Posting MR comment: comment_url={self.comment_url}, comment_project_path={self.comment_project_path}, project_ref={project_ref}, mr_iid={self.mr_iid}, full_url={url}")
         headers = {
             'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
@@ -366,7 +369,7 @@ class NoteHandler:
         }
 
         response = requests.post(url, headers=headers, json=data, verify=False)
-        logger.debug(f"Add comment to MR {self.mr_iid}: {response.status_code}")
+        logger.info(f"Add comment to MR {self.mr_iid}: status={response.status_code}, url={url}")
         if response.status_code == 201:
             logger.info("Comment successfully added to merge request.")
         else:
@@ -442,6 +445,7 @@ class PushHandler:
             logger.error("comment_url not configured; cannot add push notes")
             return
         url = urljoin(base, f"api/v4/projects/{project_ref}/repository/commits/{last_commit_id}/comments")
+        logger.info(f"Posting push notes: comment_url={self.comment_url}, comment_project_path={self.comment_project_path}, project_ref={project_ref}, commit_id={last_commit_id}, full_url={url}")
         headers = {
             'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
@@ -450,7 +454,7 @@ class PushHandler:
             'note': message
         }
         response = requests.post(url, headers=headers, json=data, verify=False)
-        logger.debug(f"Add comment to commit {last_commit_id}: {response.status_code}, {response.text}")
+        logger.info(f"Add push notes: status={response.status_code}, url={url}")
         if response.status_code == 201:
             logger.info("Comment successfully added to push commit.")
         else:

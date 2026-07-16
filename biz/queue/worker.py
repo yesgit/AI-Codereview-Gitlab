@@ -301,8 +301,9 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
                             base = _normalize_base_url(_effective_url)
                             if base:
                                 # 使用 URL-encoded project_path 确保跨实例兼容
-                                _project_ref = quote(handler.project_path, safe='') if handler.project_path else str(handler.project_id)
+                                _project_ref = quote(handler.comment_project_path, safe='') if handler.comment_project_path else str(handler.project_id)
                                 url = urljoin(base, f"api/v4/projects/{_project_ref}/repository/commits/{last_commit_id}/comments")
+                                logger.info(f"Posting push review comment: effective_url={_effective_url}, comment_project_path={handler.comment_project_path}, project_ref={_project_ref}, commit_id={last_commit_id[:8]}, full_url={url}")
                                 headers = {
                                     'Private-Token': _effective_token,
                                     'Content-Type': 'application/json'
@@ -312,7 +313,7 @@ def handle_push_event(webhook_data: dict, gitlab_token: str, gitlab_url: str, gi
                                 }
                                 import requests
                                 response = requests.post(url, headers=headers, json=data, verify=False)
-                                logger.debug(f"Add comment to commit {last_commit_id[:8]}: {response.status_code}")
+                                logger.info(f"Add comment to commit {last_commit_id[:8]}: status={response.status_code}, url={url}")
                 else:
                     review_result = "关注的文件没有修改"
                     logger.info(f"Author {author_name}: {review_result}")

@@ -33,12 +33,16 @@ def on_merge_request_reviewed(mr_review_entity: MergeRequestReviewEntity):
 {mr_review_entity.review_result}
     """
     
-    # 从webhook数据中提取GitLab信息
+    # 从webhook数据中提取GitLab信息，如果提取失败则回退到 entity 字段
     gitlab_base_url, project_slug = extract_gitlab_info(mr_review_entity.webhook_data or {})
-    
+    if not gitlab_base_url:
+        gitlab_base_url = mr_review_entity.gitlab_base_url
+    if not project_slug:
+        project_slug = mr_review_entity.project_slug
+
     notifier.send_notification(
-        content=im_msg, 
-        msg_type='markdown', 
+        content=im_msg,
+        msg_type='markdown',
         title='Merge Request Review',
         gitlab_base_url=gitlab_base_url,
         project_slug=project_slug,
@@ -72,11 +76,15 @@ def on_push_reviewed(entity: PushReviewEntity):
     if entity.review_result:
         im_msg += f"#### AI Review 结果: \n {entity.review_result}\n\n"
     
-    # 从webhook数据中提取GitLab信息
+    # 从webhook数据中提取GitLab信息，如果提取失败则回退到 entity 字段
     gitlab_base_url, project_slug = extract_gitlab_info(entity.webhook_data or {})
-    
+    if not gitlab_base_url:
+        gitlab_base_url = entity.gitlab_base_url
+    if not project_slug:
+        project_slug = entity.project_slug
+
     notifier.send_notification(
-        content=im_msg, 
+        content=im_msg,
         msg_type='markdown',
         title=f"{entity.project_name} Push Event",
         gitlab_base_url=gitlab_base_url,

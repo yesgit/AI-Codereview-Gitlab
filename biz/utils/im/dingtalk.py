@@ -12,8 +12,18 @@ from biz.utils.log import logger
 
 
 class DingTalkNotifier:
-    def __init__(self, webhook_url=None):
+    def __init__(self, config=None, webhook_url=None):
         self.enabled = os.environ.get('DINGTALK_ENABLED', '0') == '1'
+        self.config = config or {}
+
+        # 支持传入 webhook_url 或 config 字典
+        if isinstance(config, str):
+            self.default_webhook_url = config
+        elif config and isinstance(config, dict):
+            self.default_webhook_url = config.get('dingtalk_url', '')
+        else:
+            self.default_webhook_url = webhook_url or os.environ.get('DINGTALK_WEBHOOK_URL', '')
+
         if os.environ.get('DINGTALK_SECRET_ENABLED', '0') == '1':
             try:
                 timestamp = str(round(time.time() * 1000))
@@ -27,17 +37,23 @@ class DingTalkNotifier:
                 logger.info("加签后钉钉URL: %s", self.default_webhook_url)
             except Exception as e:
                 logger.error("钉钉机器人加签失败: %s", e)
-        else:
-            self.default_webhook_url = webhook_url or os.environ.get('DINGTALK_WEBHOOK_URL')
 
     def _get_webhook_url(self, project_name=None, url_slug=None):
         """
         获取项目对应的 Webhook URL
         :param project_name: 项目名称
         :param url_slug: 由 gitlab 项目的 url 转换而来的 slug
-        :return: Webhook URL
+        :return: Webhook URL，如果已禁用则返回 None
         :raises ValueError: 如果未找到 Webhook URL
         """
+        # 优先使用构造函数传入的配置
+        if self.config and self.config.get('dingtalk_enabled') is not None:
+            if not self.config.get('dingtalk_enabled'):
+                logger.info("钉钉通知已禁用（配置级别）")
+                return None
+            if self.config.get('dingtalk_url'):
+                return self.config.get('dingtalk_url')
+
         # 如果未提供 project_name，直接返回默认的 Webhook URL
         if not project_name:
             if self.default_webhook_url:
@@ -64,13 +80,20 @@ class DingTalkNotifier:
         # 如果既未找到匹配项，也没有默认值，抛出异常
         raise ValueError(f"未找到项目 '{project_name}' 对应的钉钉Webhook URL，且未设置默认的 Webhook URL。")
 
-    def send_message(self, content: str, msg_type='text', title='通知', is_at_all=False, project_name=None, url_slug = None):
+    def send_message(self, content: str, msg_type='text', title='通知', is_at_all=False,
+                     gitlab_base_url=None, project_slug=None, branch_name=None,
+                     project_name=None, url_slug=None):
         if not self.enabled:
             logger.info("钉钉推送未启用")
             return
 
         try:
             post_url = self._get_webhook_url(project_name=project_name, url_slug=url_slug)
+
+            # 如果 webhook URL 为 None（已禁用），直接返回
+            if post_url is None:
+                return
+
             headers = {
                 "Content-Type": "application/json",
                 "Charset": "UTF-8"

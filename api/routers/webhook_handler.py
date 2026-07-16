@@ -99,14 +99,22 @@ async def handle_gitlab_webhook(data: dict, request: Request):
 
     # 查项目配置，获取评论目标和审查策略
     project_slug = data.get('project', {}).get('path_with_namespace', '')
+    project_name = data.get('project', {}).get('name', '')
+    url_slug = gitlab_url_slug
     comment_url = gitlab_url
     comment_token = gitlab_token
     comment_project_path = project_slug  # 默认用源库路径
     review_strategy = os.getenv('REVIEW_STRATEGY', 'diff_only')
     if project_slug:
+        # 先尝试用 gitlab_base_url + project_slug 精确匹配
         config = WebhookService.get_webhook_mapping_by_gitlab_project(
             gitlab_url.rstrip('/'), project_slug
         )
+        # 如果精确匹配失败，回退到 url_slug 或 project_name 查找
+        if not config and (url_slug or project_name):
+            config = WebhookService.get_webhook_mapping(
+                project_name=project_name, url_slug=url_slug
+            )
         if config:
             if config.get('comment_enabled') and config.get('comment_url'):
                 comment_url = config.get('comment_url')
@@ -115,6 +123,8 @@ async def handle_gitlab_webhook(data: dict, request: Request):
                     comment_project_path = config['comment_project_path']
             if config.get('review_strategy') and config['review_strategy'].strip():
                 review_strategy = config['review_strategy'].strip()
+
+    logger.info(f'Comment config resolved: comment_url={comment_url}, comment_project_path={comment_project_path}, comment_enabled={bool(comment_url != gitlab_url)}')
 
     logger.info(f'Received event: {object_kind}')
     logger.info(f'Payload: {data}')
