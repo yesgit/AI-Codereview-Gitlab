@@ -44,6 +44,7 @@ class WebhookCreate(BaseModel):
     comment_url: Optional[str] = None
     comment_token: Optional[str] = None
     comment_project_path: Optional[str] = None
+    comment_project_id: Optional[int] = None
     review_strategy: Optional[str] = None
 
 
@@ -93,6 +94,7 @@ class WebhookResponse(BaseModel):
     comment_url: Optional[str] = None
     comment_token: Optional[str] = None
     comment_project_path: Optional[str] = None
+    comment_project_id: Optional[int] = None
     review_strategy: Optional[str] = None
     created_at: Optional[int] = None
     updated_at: Optional[int] = None
@@ -170,6 +172,7 @@ async def create_webhook(webhook: WebhookCreate, current_user: str = Depends(get
         comment_url=webhook.comment_url,
         comment_token=webhook.comment_token,
         comment_project_path=webhook.comment_project_path,
+        comment_project_id=webhook.comment_project_id,
         review_strategy=webhook.review_strategy
     )
 
@@ -227,6 +230,7 @@ async def update_webhook(webhook_id: int, webhook: WebhookUpdate, current_user: 
         comment_url=webhook.comment_url,
         comment_token=webhook.comment_token,
         comment_project_path=webhook.comment_project_path,
+        comment_project_id=webhook.comment_project_id,
         review_strategy=webhook.review_strategy
     )
 

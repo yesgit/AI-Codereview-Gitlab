@@ -68,14 +68,16 @@ def _normalize_base_url(u: str) -> str:
 class MergeRequestHandler:
     def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str,
                  comment_url: str = None, comment_token: str = None,
-                 comment_project_path: str = None):
+                 comment_project_path: str = None,
+                 comment_project_id: int = None):
         self.merge_request_iid = None
         self.webhook_data = webhook_data
         self.gitlab_token = gitlab_token
         self.gitlab_url = gitlab_url
         self.comment_url = comment_url or gitlab_url
         self.comment_token = comment_token or gitlab_token
-        # 评论目标项目路径：优先使用配置的路径，否则用源库路径
+        # 评论目标：优先数字 project_id，其次 URL-encoded path，最后源库路径
+        self.comment_project_id = comment_project_id
         self.comment_project_path = comment_project_path or webhook_data.get('project', {}).get('path_with_namespace', '')
         self.event_type = None
         self.project_id = None
@@ -157,15 +159,22 @@ class MergeRequestHandler:
             logger.warn(f"Failed to get commits: {response.status_code}, {response.text}")
             return []
 
+    def _get_project_ref(self) -> str:
+        """获取评论目标项目的引用（数字 ID 优先，其次 URL-encoded path，最后源项目 ID）"""
+        if self.comment_project_id:
+            return str(self.comment_project_id)
+        if self.comment_project_path:
+            return quote(self.comment_project_path, safe='')
+        return str(self.project_id)
+
     def add_merge_request_notes(self, review_result):
         base = _normalize_base_url(self.comment_url)
         if not base:
             logger.error("comment_url not configured; cannot add merge request notes")
             return
-        # 使用 URL-encoded project_path 而非数字 project_id，确保跨实例兼容
-        project_ref = quote(self.comment_project_path, safe='') if self.comment_project_path else str(self.project_id)
+        project_ref = self._get_project_ref()
         url = urljoin(base, f"api/v4/projects/{project_ref}/merge_requests/{self.merge_request_iid}/notes")
-        logger.info(f"Posting MR notes: comment_url={self.comment_url}, comment_project_path={self.comment_project_path}, project_ref={project_ref}, mr_iid={self.merge_request_iid}, full_url={url}")
+        logger.info(f"Posting MR notes: comment_url={self.comment_url}, project_ref={project_ref}, mr_iid={self.merge_request_iid}, full_url={url}")
         headers = {
             'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
@@ -206,12 +215,14 @@ class MergeRequestHandler:
 class NoteHandler:
     def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str,
                  comment_url: str = None, comment_token: str = None,
-                 comment_project_path: str = None):
+                 comment_project_path: str = None,
+                 comment_project_id: int = None):
         self.webhook_data = webhook_data
         self.gitlab_token = gitlab_token
         self.gitlab_url = gitlab_url
         self.comment_url = comment_url or gitlab_url
         self.comment_token = comment_token or gitlab_token
+        self.comment_project_id = comment_project_id
         self.comment_project_path = comment_project_path or webhook_data.get('project', {}).get('path_with_namespace', '')
         self.event_type = None
         self.note_type = None  # Commit 或 MergeRequest
@@ -316,20 +327,28 @@ class NoteHandler:
             logger.warn(f"Failed to get MR changes: {response.status_code}")
             return []
 
+    def _get_project_ref(self) -> str:
+        """获取评论目标项目的引用（数字 ID 优先，其次 URL-encoded path，最后源项目 ID）"""
+        if self.comment_project_id:
+            return str(self.comment_project_id)
+        if self.comment_project_path:
+            return quote(self.comment_project_path, safe='')
+        return str(self.project_id)
+
     def add_commit_comment(self, message: str):
         """在 commit 上添加评论"""
         if not self.commit_id:
             logger.error("Commit ID not found, cannot add comment")
             return
 
-        project_ref = quote(self.comment_project_path, safe='') if self.comment_project_path else str(self.project_id)
+        project_ref = self._get_project_ref()
         base = _normalize_base_url(self.comment_url)
         if not base:
             logger.error("comment_url not configured; cannot add commit comment")
             return
 
         url = urljoin(base, f"api/v4/projects/{project_ref}/repository/commits/{self.commit_id}/comments")
-        logger.info(f"Posting commit comment: comment_url={self.comment_url}, comment_project_path={self.comment_project_path}, project_ref={project_ref}, commit_id={self.commit_id}, full_url={url}")
+        logger.info(f"Posting commit comment: comment_url={self.comment_url}, project_ref={project_ref}, commit_id={self.commit_id}, full_url={url}")
         headers = {
             'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
@@ -352,14 +371,14 @@ class NoteHandler:
             logger.error("MR IID or project ID not found, cannot add comment")
             return
 
-        project_ref = quote(self.comment_project_path, safe='') if self.comment_project_path else str(self.project_id)
+        project_ref = self._get_project_ref()
         base = _normalize_base_url(self.comment_url)
         if not base:
             logger.error("comment_url not configured; cannot add MR comment")
             return
 
         url = urljoin(base, f"api/v4/projects/{project_ref}/merge_requests/{self.mr_iid}/notes")
-        logger.info(f"Posting MR comment: comment_url={self.comment_url}, comment_project_path={self.comment_project_path}, project_ref={project_ref}, mr_iid={self.mr_iid}, full_url={url}")
+        logger.info(f"Posting MR comment: comment_url={self.comment_url}, project_ref={project_ref}, mr_iid={self.mr_iid}, full_url={url}")
         headers = {
             'Private-Token': self.comment_token,
             'Content-Type': 'application/json'
@@ -380,12 +399,14 @@ class NoteHandler:
 class PushHandler:
     def __init__(self, webhook_data: dict, gitlab_token: str, gitlab_url: str,
                  comment_url: str = None, comment_token: str = None,
-                 comment_project_path: str = None):
+                 comment_project_path: str = None,
+                 comment_project_id: int = None):
         self.webhook_data = webhook_data
         self.gitlab_token = gitlab_token
         self.gitlab_url = gitlab_url
         self.comment_url = comment_url or gitlab_url
         self.comment_token = comment_token or gitlab_token
+        self.comment_project_id = comment_project_id
         self.comment_project_path = comment_project_path or webhook_data.get('project', {}).get('path_with_namespace', '')
         self.event_type = None
         self.project_id = None
@@ -427,6 +448,14 @@ class PushHandler:
         logger.info(f"Collected {len(commit_details)} commits from push event.")
         return commit_details
 
+    def _get_project_ref(self) -> str:
+        """获取评论目标项目的引用（数字 ID 优先，其次 URL-encoded path，最后源项目 ID）"""
+        if self.comment_project_id:
+            return str(self.comment_project_id)
+        if self.comment_project_path:
+            return quote(self.comment_project_path, safe='')
+        return str(self.project_id)
+
     def add_push_notes(self, message: str):
         # 添加评论到 GitLab Push 请求的提交中（此处假设是在最后一次提交上添加注释）
         if not self.commit_list:
@@ -439,7 +468,7 @@ class PushHandler:
             logger.error("Last commit ID not found.")
             return
 
-        project_ref = quote(self.comment_project_path, safe='') if self.comment_project_path else str(self.project_id)
+        project_ref = self._get_project_ref()
         base = _normalize_base_url(self.comment_url)
         if not base:
             logger.error("comment_url not configured; cannot add push notes")
